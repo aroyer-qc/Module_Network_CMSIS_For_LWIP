@@ -1,5 +1,5 @@
 /* -----------------------------------------------------------------------------
- * Copyright (c) 2013-2019 Arm Limited (or its affiliates). All 
+ * Copyright (c) 2013-2019 Arm Limited (or its affiliates). All
  * rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -27,97 +27,9 @@
 #define __EMAC_STM32F4XX_H
 
 #include <string.h>
-
-
 #include "Driver_ETH_MAC.h"
-//#include "stm32f4xx_hal.h"
 
-//#include "RTE_Components.h"
-//#if   defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
-//#include "RTE_Device.h"
-//#elif defined(RTE_DEVICE_FRAMEWORK_CUBE_MX)
-//#include "MX_Device.h"
-//#else
-//#error "::Device:STM32Cube Framework: not selected in RTE"
-//#endif
-
-//#ifdef RTE_DEVICE_FRAMEWORK_CLASSIC
-//  #if (defined(RTE_Drivers_ETH_MAC0) && !RTE_ETH)
-//  #error "Ethernet not configured in RTE_Device.h!"
-//  #endif
-
-//  #if (RTE_ETH_MII && RTE_ETH_RMII)
-//  #error "Ethernet interface configuration in RTE_Device.h is invalid!"
-//  #endif
-
-  #define MX_ETH_MDC_GPIOx        RTE_ETH_MDI_MDC_PORT
-  #define MX_ETH_MDC_GPIO_Pin     (1U << RTE_ETH_MDI_MDC_PIN)
-  #define MX_ETH_MDIO_GPIOx       RTE_ETH_MDI_MDIO_PORT
-  #define MX_ETH_MDIO_GPIO_Pin    (1U << RTE_ETH_MDI_MDIO_PIN)
-
-  #if (RTE_ETH_MII)
-    #define ETH_MII                 1
-
-    #define MX_ETH_TXD0_GPIOx       RTE_ETH_MII_TXD0_PORT
-    #define MX_ETH_TXD0_GPIO_Pin    (1U << RTE_ETH_MII_TXD0_PIN)
-    #define MX_ETH_TXD1_GPIOx       RTE_ETH_MII_TXD1_PORT
-    #define MX_ETH_TXD1_GPIO_Pin    (1U << RTE_ETH_MII_TXD1_PIN)
-    #define MX_ETH_TXD2_GPIOx       RTE_ETH_MII_TXD2_PORT
-    #define MX_ETH_TXD2_GPIO_Pin    (1U << RTE_ETH_MII_TXD2_PIN)
-    #define MX_ETH_TXD3_GPIOx       RTE_ETH_MII_TXD3_PORT
-    #define MX_ETH_TXD3_GPIO_Pin    (1U << RTE_ETH_MII_TXD3_PIN)
-    #define MX_ETH_RXD0_GPIOx       RTE_ETH_MII_RXD0_PORT
-    #define MX_ETH_RXD0_GPIO_Pin    (1U << RTE_ETH_MII_RXD0_PIN)
-    #define MX_ETH_RXD1_GPIOx       RTE_ETH_MII_RXD1_PORT
-    #define MX_ETH_RXD1_GPIO_Pin    (1U << RTE_ETH_MII_RXD1_PIN)
-    #define MX_ETH_RXD2_GPIOx       RTE_ETH_MII_RXD2_PORT
-    #define MX_ETH_RXD2_GPIO_Pin    (1U << RTE_ETH_MII_RXD2_PIN)
-    #define MX_ETH_RXD3_GPIOx       RTE_ETH_MII_RXD3_PORT
-    #define MX_ETH_RXD3_GPIO_Pin    (1U << RTE_ETH_MII_RXD3_PIN)
-    #define MX_ETH_TX_EN_GPIOx      RTE_ETH_MII_TX_EN_PORT
-    #define MX_ETH_TX_EN_GPIO_Pin   (1U << RTE_ETH_MII_TX_EN_PIN)
-    #define MX_ETH_TX_CLK_GPIOx     RTE_ETH_MII_TX_CLK_PORT
-    #define MX_ETH_TX_CLK_GPIO_Pin  (1U << RTE_ETH_MII_TX_CLK_PIN)
-    #define MX_ETH_RX_CLK_GPIOx     RTE_ETH_MII_RX_CLK_PORT
-    #define MX_ETH_RX_CLK_GPIO_Pin  (1U << RTE_ETH_MII_RX_CLK_PIN)
-    #define MX_ETH_CRS_GPIOx        RTE_ETH_MII_CRS_PORT
-    #define MX_ETH_CRS_GPIO_Pin     (1U << RTE_ETH_MII_CRS_PIN)
-    #define MX_ETH_COL_GPIOx        RTE_ETH_MII_COL_PORT
-    #define MX_ETH_COL_GPIO_Pin     (1U << RTE_ETH_MII_COL_PIN)
-    #define MX_ETH_RX_DV_GPIOx      RTE_ETH_MII_RX_DV_PORT
-    #define MX_ETH_RX_DV_GPIO_Pin   (1U << RTE_ETH_MII_RX_DV_PIN)
-    #define MX_ETH_RX_ER_GPIOx      RTE_ETH_MII_RX_ER_PORT
-    #define MX_ETH_RX_ER_GPIO_Pin   (1U << RTE_ETH_MII_RX_ER_PIN)
-
-  #else
-    #define ETH_MII                 0
-
-    #define MX_ETH_TXD0_GPIOx       RTE_ETH_RMII_TXD0_PORT
-    #define MX_ETH_TXD0_GPIO_Pin    (1U << RTE_ETH_RMII_TXD0_PIN)
-    #define MX_ETH_TXD1_GPIOx       RTE_ETH_RMII_TXD1_PORT
-    #define MX_ETH_TXD1_GPIO_Pin    (1U << RTE_ETH_RMII_TXD1_PIN)
-    #define MX_ETH_RXD0_GPIOx       RTE_ETH_RMII_RXD0_PORT
-    #define MX_ETH_RXD0_GPIO_Pin    (1U << RTE_ETH_RMII_RXD0_PIN)
-    #define MX_ETH_RXD1_GPIOx       RTE_ETH_RMII_RXD1_PORT
-    #define MX_ETH_RXD1_GPIO_Pin    (1U << RTE_ETH_RMII_RXD1_PIN)
-    #define MX_ETH_TX_EN_GPIOx      RTE_ETH_RMII_TX_EN_PORT
-    #define MX_ETH_TX_EN_GPIO_Pin   (1U << RTE_ETH_RMII_TX_EN_PIN)
-    #define MX_ETH_REF_CLK_GPIOx    RTE_ETH_RMII_REF_CLK_PORT
-    #define MX_ETH_REF_CLK_GPIO_Pin (1U << RTE_ETH_RMII_REF_CLK_PIN)
-    #define MX_ETH_CRS_DV_GPIOx     RTE_ETH_RMII_CRS_DV_PORT
-    #define MX_ETH_CRS_DV_GPIO_Pin  (1U << RTE_ETH_RMII_CRS_DV_PIN)
-
-#endif /* RTE_ETH_RMII */
-
-#else /* MX_Device.h */
-  #if defined(MX_ETH_TXD2_Pin)   && defined(MX_ETH_TXD3_Pin)   && \
-      defined(MX_ETH_RXD2_Pin)   && defined(MX_ETH_RXD3_Pin)   && \
-      defined(MX_ETH_TX_CLK_Pin) && defined(MX_ETH_RX_CLK_Pin)
-    #define ETH_MII             1
-  #else
-    #define ETH_MII             0
-  #endif
-#endif
+#define ETH_MII                 0
 
 /* EMAC Driver state flags */
 #define EMAC_FLAG_INIT      (1 << 0)    // Driver initialized
@@ -184,12 +96,6 @@
 #define DMA_RX_RCH      0x00004000U     // Second address chained
 #define DMA_RX_RBS1     0x00001FFFU     // Receive buffer 1 size
 
-typedef struct _ETH_PIN {
-  GPIO_TypeDef *port;
-  uint16_t      pin;
-  uint16_t      reserved;
-} ETH_PIN;
-
 /* EMAC Driver Control Information */
 typedef struct {
   ARM_ETH_MAC_SignalEvent_t cb_event;   // Event callback
@@ -206,5 +112,5 @@ typedef struct {
 } EMAC_CTRL;
 
 // Global functions and variables exported by driver .c module
-extern ARM_DRIVER_ETH_MAC Driver_ETH_MAC0;
+extern ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_(ETH_MAC_NUM);
 #endif /* __EMAC_STM32F4XX_H */

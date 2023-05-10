@@ -93,4 +93,7 @@ typedef struct phy_ctrl {
   uint8_t             rsvd;             /* Reserved                          */
 } PHY_CTRL;
 
+// Global functions and variables exported by driver .c module
+extern ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY_(ETH_PHY_NUM);
+
 #endif /* __PHY_LAN8720_H */

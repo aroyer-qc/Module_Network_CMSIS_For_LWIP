@@ -43,9 +43,9 @@
 //#include "arch/sys_arch.h"
 //#include "lwip/sys.h"
 
-#include "MT700_Ethernet.h"
-#include "ethif_config.h"
+#include "DIGINI_EthernetDriver.h"
 #include "ethernetif.h"
+#include "lib_digini.h"
 
 /* Define those to better describe your network interface. */
 #define IFNAME0 'e'
@@ -63,7 +63,7 @@ struct ethernetif {
   bool               event_rx_frame;    // Callback RX event generated
   bool               phy_ok;            // PHY initialized successfully
   bool               rx_event;          // Frame received
-  SemaphoreHandle_t  sem;
+  nOS_Sem            sem;
 };
 
 static struct ethernetif eth0_status;
