@@ -1,4 +1,109 @@
 /* -----------------------------------------------------------------------------
+ * Copyright (c) 2013-2022 Arm Limited (or its affiliates). 
+ * All rights reserved.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the License); you may
+ * not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *
+ * $Date:        19. August 2022
+ * $Revision:    V1.12
+ *
+ * Driver:       Driver_ETH_MAC0
+ * Configured:   via RTE_Device.h configuration file
+ * Project:      Ethernet Media Access (MAC) Driver for STM32F7xx
+ * --------------------------------------------------------------------------
+ * Use the following configuration settings in the middleware component
+ * to connect to this driver.
+ *
+ *   Configuration Setting                     Value
+ *   ---------------------                     -----
+ *   Connect to hardware via Driver_ETH_MAC# = 0
+ * --------------------------------------------------------------------------
+ * Define used for driver configuration (at compile time):
+ *
+ *   EMAC_DCACHE_MAINTENANCE:       0U  disable EMAC DCache maintenance operations
+ *                                  1U   enable EMAC DCache maintenance operations
+ *     - default value:             1U
+ *
+ * Note:
+ * - EMAC_DMA_MEMORY_ADDR must be 32-Byte aligned, when EMAC_DCACHE_MAINTENANCE is enabled.
+ * - If EMAC descriptors and data buffers are placed in non-cacheable memory
+ *   the cache maintenance operations should be disabled by setting
+ *   EMAC_DCACHE_MAINTENANCE macro value to 0.
+ * -------------------------------------------------------------------------- */
+
+/* History:
+ *  Version 1.12
+ *    Updated functions GetRxFrameTime and GetTxFrameTime
+ *    Corrected type casting
+ *  Version 1.11
+ *    Renamed define for Data Cache maintenance (EMAC_DCACHE_MAINTENANCE)
+ *  Version 1.10
+ *    Corrected Send/ReadFrame functions to use memory barriers to ensure 
+ *    correct order of DMA descriptor update and data coherency before 
+ *    DMA operation is started
+ *  Version 1.9
+ *    Corrected data cache handling
+ *  Version 1.8
+ *    ETH DMA initialization is done when MAC transmitter or receiver is enabled
+ *  Version 1.7
+ *    Corrected __MEMORY_AT(x) define for AC6
+ *  Version 1.6
+ *    Corrected data cache problem
+ *  Version 1.5
+ *    Corrected transmit checksum offload for IPv4 fragmented packets
+ *  Version 1.4
+ *    Added support for ARM Compiler 6
+ *  Version 1.3
+ *    Corrected PTP functionality
+ *  Version 1.2
+ *    Corrected PowerControl function for:
+ *      - Unconditional Power Off
+ *      - Conditional Power full (driver must be initialized)
+ *    Corrected return value of the ReadFrame function
+ *  Version 1.1
+ *    Corrected lockup after long runtime (unhandled MMC interrupts)
+ *    Enhanced STM32CubeMx compatibility
+ *  Version 1.0
+ *    Initial release
+ */
+ 
+/*! \page stm32f7_emac CMSIS-Driver Ethernet MAC Setup
+
+The CMSIS-Driver EMAC requires:
+  - Setup of HCLK to 25MHz or higher
+  - Optional setup of SYSCLK to 50MHz or higher, when Ethernet PTP is used
+  - Setup of ETH in MII or RMII mode
+  - Optional configuration for software controlled SMI:
+    - Ethernet MDIO pin: configure arbitrary pin in GPIO_Output mode and add User Label: Ethernet_MDIO
+    - Ethernet MDC pin: configure arbitrary pin in GPIO_Output mode and add User Label: Ethernet_MDC
+
+\note The User Label name is used to connect the CMSIS-Driver to the GPIO pin.
+
+The example below uses correct settings for STM32F746G-Discovery:
+  - ETH Mode: RMII
+
+For different boards, refer to the hardware schematics to reflect correct setup values.
+
+The STM32CubeMX configuration steps for Pinout, Clock, and System Configuration are 
+listed below. Enter the values that are marked \b bold.
+
+Pinout tab
+----------
+  1. Configure ETH mode
+     - Peripherals \b ETH: Mode=<b>RMII</b>
 
 Clock Configuration tab
 -----------------------
@@ -6,26 +111,41 @@ Clock Configuration tab
 
 Configuration tab
 -----------------
-  1. Under Connectivity open ETH Configuration:
-     - GPIO Settings: review settings, no changes required
-          Pin Name | Signal on Pin | GPIO mode | GPIO Pull-up/Pull..| Maximum out |
-          :--------|:--------------|:----------|:-------------------|:------------|
-          PA1      | ETH_REF_CLK   | Alternate | No pull-up and no..| Very High   |
-          PA2      | ETH_MDIO      | Alternate | No pull-up and no..| Very High   |
-          PA7      | ETH_CRS_DV    | Alternate | No pull-up and no..| Very High   |
-          PC1      | ETH_MDC       | Alternate | No pull-up and no..| Very High   |
-          PC4      | ETH_RXD0      | Alternate | No pull-up and no..| Very High   |
-          PC5      | ETH_RXD1      | Alternate | No pull-up and no..| Very High   |
-          PG11     | ETH_TX_EN     | Alternate | No pull-up and no..| Very High   |
-          PG13     | ETH_TXD0      | Alternate | No pull-up and no..| Very High   |
-          PG14     | ETH_TXD1      | Alternate | No pull-up and no..| Very High   |
+  1. Under Connectivity open \b ETH Configuration:
+     - <b>GPIO Settings</b>: review settings, no changes required
+          Pin Name | Signal on Pin | GPIO mode | GPIO Pull-up/Pull..| Maximum out | User Label
+          :--------|:--------------|:----------|:-------------------|:------------|:----------
+          PA1      | ETH_REF_CLK   | Alternate | No pull-up and no..| High        |.
+          PA2      | ETH_MDIO      | Alternate | No pull-up and no..| High        |.
+          PA7      | ETH_CRS_DV    | Alternate | No pull-up and no..| High        |.
+          PC1      | ETH_MDC       | Alternate | No pull-up and no..| High        |.
+          PC4      | ETH_RXD0      | Alternate | No pull-up and no..| High        |.
+          PC5      | ETH_RXD1      | Alternate | No pull-up and no..| High        |.
+          PG11     | ETH_TX_EN     | Alternate | No pull-up and no..| High        |.
+          PG13     | ETH_TXD0      | Alternate | No pull-up and no..| High        |.
+          PG14     | ETH_TXD1      | Alternate | No pull-up and no..| High        |.
 
-     - NVIC Settings: enable interrupts
+     - <b>NVIC Settings</b>: enable interrupts
           Interrupt Table                      | Enable | Preemption Priority | Sub Priority
           :------------------------------------|:-------|:--------------------|:--------------
-          Ethernet global interrupt            |   ON   | 0                   | 0
+          Ethernet global interrupt            |\b ON   | 0                   | 0
 
+     - Parameter Settings: not used
+     - User Constants: not used
+
+     Click \b OK to close the ETH Configuration dialog
 */
+
+/*! \cond */
+
+/* Data Cache maintenance operations */
+#ifndef EMAC_DCACHE_MAINTENANCE
+#ifdef  EMAC_DCACHE
+#define EMAC_DCACHE_MAINTENANCE       (EMAC_DCACHE)
+#else
+#define EMAC_DCACHE_MAINTENANCE       (1U)
+#endif
+#endif
 
 /* Receive/transmit Checksum offload enable */
 #ifndef EMAC_CHECKSUM_OFFLOAD
@@ -37,12 +157,14 @@ Configuration tab
 #define EMAC_TIME_STAMP         0
 #endif
 
-#include "EMAC_STM32F4xx.h"
-#include "lib_digini.h"
-//#include "lib_io.h"
+/* Ethernet DMA Descriptor/Buffer memory address */
+#ifdef  EMAC_DMA_MEMORY_ADDRESS
+#define EMAC_DMA_MEMORY_ADDR    EMAC_DMA_MEMORY_ADDRESS
+#endif
 
+#include "EMAC_STM32F7xx.h"
 
-#define ARM_ETH_MAC_DRV_VERSION ARM_DRIVER_VERSION_MAJOR_MINOR(1,0)     /* driver version */
+#define ARM_ETH_MAC_DRV_VERSION ARM_DRIVER_VERSION_MAJOR_MINOR(1,12) /* driver version */
 
 /* Timeouts */
 #define PHY_TIMEOUT         2U          /* PHY Register access timeout in ms  */
@@ -55,103 +177,116 @@ Configuration tab
 /* Interrupt Handler Prototype */
 void ETH_IRQHandler (void);
 
-
-/* DMA RX Descriptor */
-typedef struct rx_desc
-{
-    uint32_t volatile Stat;
-    uint32_t          Ctrl;
-    uint8_t  const   *Addr;
-    struct rx_desc   *Next;
-  #if ((EMAC_CHECKSUM_OFFLOAD != 0) || (EMAC_TIME_STAMP != 0))
-    uint32_t          ExtStat;
-    uint32_t          Reserved[1];
-    uint32_t          TimeLo;
-    uint32_t          TimeHi;
-  #endif
-} RX_Desc;
-
-/* DMA TX Descriptor */
-typedef struct tx_desc
-{
-    uint32_t volatile CtrlStat;
-    uint32_t          Size;
-    uint8_t          *Addr;
-    struct tx_desc   *Next;
-  #if ((EMAC_CHECKSUM_OFFLOAD != 0) || (EMAC_TIME_STAMP != 0))
-    uint32_t          Reserved[2];
-    uint32_t          TimeLo;
-    uint32_t          TimeHi;
-  #endif
-} TX_Desc;
-
-/* Ethernet Pin definitions */
-static const IO_ID_e ETH_Pins[] =
-{
-    IO_MX_ETH_MDC,      /* MII, RMII */
-    IO_MX_ETH_MDIO,     /* MII, RMII */
-    IO_MX_ETH_TXD0,     /* MII, RMII */
-    IO_MX_ETH_TXD1,     /* MII, RMII */
-    IO_MX_ETH_RXD0,     /* MII, RMII */
-    IO_MX_ETH_RXD1,     /* MII, RMII */
-    IO_MX_ETH_TX_EN,    /* MII, RMII */
-#if (ETH_MII)
-    IO_MX_ETH_TXD2,     /* MII, ---- */
-    IO_MX_ETH_TXD3,     /* MII, ---- */
-    IO_MX_ETH_RXD2,     /* MII, ---- */
-    IO_MX_ETH_RXD3,     /* MII, ---- */
-    IO_MX_ETH_TX_CLK,   /* MII, ---- */
-    IO_MX_ETH_RX_CLK,   /* MII, ---- */
-    IO_MX_ETH_CRS,      /* MII, ---- */
-    IO_MX_ETH_COL,      /* MII, ---- */
-    IO_MX_ETH_RX_DV,    /* MII, ---- */
-    IO_MX_ETH_RX_ER,    /* MII, ---- */
+#if defined(RTE_DEVICE_FRAMEWORK_CUBE_MX)
+extern ETH_HandleTypeDef heth;
 #else
-    IO_MX_ETH_CRS_DV,    /* ---, RMII */
-    IO_MX_ETH_REF_CLK,   /* ---, RMII */
+/* Ethernet Pin definitions */
+static const ETH_PIN eth_pins[] = {
+  { MX_Ethernet_MDC_GPIOx,  MX_Ethernet_MDC_GPIO_Pin,  0U}, /* MII, RMII */
+  { MX_Ethernet_MDIO_GPIOx, MX_Ethernet_MDIO_GPIO_Pin, 0U}, /* MII, RMII */
+  { MX_ETH_TXD0_GPIOx,      MX_ETH_TXD0_GPIO_Pin,      0U}, /* MII, RMII */
+  { MX_ETH_TXD1_GPIOx,      MX_ETH_TXD1_GPIO_Pin,      0U}, /* MII, RMII */
+  { MX_ETH_RXD0_GPIOx,      MX_ETH_RXD0_GPIO_Pin,      0U}, /* MII, RMII */
+  { MX_ETH_RXD1_GPIOx,      MX_ETH_RXD1_GPIO_Pin,      0U}, /* MII, RMII */
+  { MX_ETH_TX_EN_GPIOx,     MX_ETH_TX_EN_GPIO_Pin,     0U}  /* MII, RMII */
+#if (ETH_MII)
+, { MX_ETH_TXD2_GPIOx,      MX_ETH_TXD2_GPIO_Pin,      0U}, /* MII, ---- */
+  { MX_ETH_TXD3_GPIOx,      MX_ETH_TXD3_GPIO_Pin,      0U}, /* MII, ---- */
+  { MX_ETH_RXD2_GPIOx,      MX_ETH_RXD2_GPIO_Pin,      0U}, /* MII, ---- */
+  { MX_ETH_RXD3_GPIOx,      MX_ETH_RXD3_GPIO_Pin,      0U}, /* MII, ---- */
+  { MX_ETH_TX_CLK_GPIOx,    MX_ETH_TX_CLK_GPIO_Pin,    0U}, /* MII, ---- */
+  { MX_ETH_RX_CLK_GPIOx,    MX_ETH_RX_CLK_GPIO_Pin,    0U}, /* MII, ---- */
+  { MX_ETH_RX_DV_GPIOx,     MX_ETH_RX_DV_GPIO_Pin,     0U}  /* MII, ---- */
+  #ifdef MX_ETH_RX_ER_GPIOx
+, { MX_ETH_RX_ER_GPIOx,     MX_ETH_RX_ER_GPIO_Pin,     0U}  /* MII, ---- */
+  #endif
+  #ifdef MX_ETH_CRS_GPIOx
+, { MX_ETH_CRS_GPIOx,       MX_ETH_CRS_GPIO_Pin,       0U}  /* MII, ---- */
+  #endif
+  #ifdef MX_ETH_COL_GPIOx
+, { MX_ETH_COL_GPIOx,       MX_ETH_COL_GPIO_Pin,       0U}  /* MII, ---- */
+  #endif
+#else
+, { MX_ETH_CRS_DV_GPIOx,    MX_ETH_CRS_DV_GPIO_Pin,    0U}, /* ---, RMII */
+  { MX_ETH_REF_CLK_GPIOx,   MX_ETH_REF_CLK_GPIO_Pin,   0U}  /* ---, RMII */
 #endif
 };
+#endif
 
 /* Driver Version */
-static const ARM_DRIVER_VERSION DriverVersion =
-{
+static const ARM_DRIVER_VERSION DriverVersion = {
   ARM_ETH_MAC_API_VERSION,
   ARM_ETH_MAC_DRV_VERSION
 };
 
 /* Driver Capabilities */
-static const ARM_ETH_MAC_CAPABILITIES DriverCapabilities =
-{
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_ip4  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_ip6  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_udp  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_tcp  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_icmp */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_ip4  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_ip6  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_udp  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_tcp  */
-    (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_icmp */
-    (ETH_MII != 0) ?
-    ARM_ETH_INTERFACE_MII :
-    ARM_ETH_INTERFACE_RMII,                   /* media_interface          */
-    0U,                                       /* mac_address              */
-    1U,                                       /* event_rx_frame           */
-    1U,                                       /* event_tx_frame           */
-    1U,                                       /* event_wakeup             */
-    (EMAC_TIME_STAMP != 0) ? 1U : 0U          /* precision_timer          */
-  #if (defined(ARM_ETH_MAC_API_VERSION) && (ARM_ETH_MAC_API_VERSION >= 0x201U))
-    , 0U                                        /* reserved bits            */
-  #endif
+static const ARM_ETH_MAC_CAPABILITIES DriverCapabilities = {
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_ip4  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_ip6  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_udp  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_tcp  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_rx_icmp */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_ip4  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_ip6  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_udp  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_tcp  */
+  (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_icmp */
+  (ETH_MII != 0) ?
+  ARM_ETH_INTERFACE_MII :
+  ARM_ETH_INTERFACE_RMII,                   /* media_interface          */
+  0U,                                       /* mac_address              */
+  1U,                                       /* event_rx_frame           */
+  1U,                                       /* event_tx_frame           */
+  1U,                                       /* event_wakeup             */
+  (EMAC_TIME_STAMP != 0) ? 1U : 0U          /* precision_timer          */
+#if (defined(ARM_ETH_MAC_API_VERSION) && (ARM_ETH_MAC_API_VERSION >= 0x201U))
+, 0U                                        /* reserved bits            */
+#endif
 };
 
 /* Local variables */
 static EMAC_CTRL Emac;
 
-static RX_Desc   rx_desc[NUM_RX_BUF];
-static TX_Desc   tx_desc[NUM_TX_BUF];
-static uint32_t  rx_buf [NUM_RX_BUF][ETH_BUF_SIZE >> 2];
-static uint32_t  tx_buf [NUM_TX_BUF][ETH_BUF_SIZE >> 2];
+/* Ethernet DMA Descriptor/Buffer memory */
+static struct {
+  RX_Desc  rx[NUM_RX_BUF];
+  TX_Desc  tx[NUM_TX_BUF];
+  uint32_t rx_buf [NUM_RX_BUF][ETH_BUF_SIZE>>2];
+  uint32_t tx_buf [NUM_TX_BUF][ETH_BUF_SIZE>>2];
+} Desc __MEMORY_AT(EMAC_DMA_MEMORY_ADDR);
+
+
+#if defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
+/**
+  \fn          void Enable_GPIO_Clock (const GPIO_TypeDef *port)
+  \brief       Enable GPIO clock
+*/
+static void Enable_GPIO_Clock (const GPIO_TypeDef *GPIOx) {
+  if      (GPIOx == GPIOA) { __HAL_RCC_GPIOA_CLK_ENABLE(); }
+  else if (GPIOx == GPIOB) { __HAL_RCC_GPIOB_CLK_ENABLE(); }
+  else if (GPIOx == GPIOC) { __HAL_RCC_GPIOC_CLK_ENABLE(); }
+  else if (GPIOx == GPIOD) { __HAL_RCC_GPIOD_CLK_ENABLE(); }
+  else if (GPIOx == GPIOE) { __HAL_RCC_GPIOE_CLK_ENABLE(); }
+#if defined(GPIOF)
+  else if (GPIOx == GPIOF) { __HAL_RCC_GPIOF_CLK_ENABLE(); }
+#endif
+#if defined(GPIOG)
+  else if (GPIOx == GPIOG) { __HAL_RCC_GPIOG_CLK_ENABLE(); }
+#endif
+#if defined(GPIOH)
+  else if (GPIOx == GPIOH) { __HAL_RCC_GPIOH_CLK_ENABLE(); }
+#endif
+#if defined(GPIOI)
+  else if (GPIOx == GPIOI) { __HAL_RCC_GPIOI_CLK_ENABLE(); }
+#endif
+#if defined(GPIOJ)
+  else if (GPIOx == GPIOJ) { __HAL_RCC_GPIOJ_CLK_ENABLE(); }
+#endif
+#if defined(GPIOK)
+  else if (GPIOx == GPIOK) { __HAL_RCC_GPIOK_CLK_ENABLE(); }
+#endif
+}
+#endif
 
 /**
   \fn          void init_rx_desc (void)
@@ -162,15 +297,19 @@ static void init_rx_desc (void) {
   uint32_t i,next;
 
   for (i = 0U; i < NUM_RX_BUF; i++) {
-    rx_desc[i].Stat = DMA_RX_OWN;
-    rx_desc[i].Ctrl = DMA_RX_RCH | ETH_BUF_SIZE;
-    rx_desc[i].Addr = (uint8_t *)&rx_buf[i];
+    Desc.rx[i].Stat = DMA_RX_OWN;
+    Desc.rx[i].Ctrl = DMA_RX_RCH | ETH_BUF_SIZE;
+    Desc.rx[i].Addr = (uint8_t *)&Desc.rx_buf[i];
     next = i + 1U;
     if (next == NUM_RX_BUF) { next = 0U; }
-    rx_desc[i].Next = &rx_desc[next];
+    Desc.rx[i].Next = &Desc.rx[next];
   }
-
-  ETH->DMARDLAR = (uint32_t)&rx_desc[0];
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_CleanDCache_by_Addr ((void *)Desc.rx, sizeof(Desc.rx));
+  }
+#endif
+  ETH->DMARDLAR = (uint32_t)&Desc.rx[0];
   Emac.rx_index = 0U;
 }
 
@@ -183,13 +322,18 @@ static void init_tx_desc (void) {
   uint32_t i,next;
 
   for (i = 0; i < NUM_TX_BUF; i++) {
-    tx_desc[i].CtrlStat = DMA_TX_TCH | DMA_TX_LS | DMA_TX_FS;
-    tx_desc[i].Addr     = (uint8_t *)&tx_buf[i];
+    Desc.tx[i].CtrlStat = DMA_TX_TCH | DMA_TX_LS | DMA_TX_FS;
+    Desc.tx[i].Addr     = (uint8_t *)&Desc.tx_buf[i];
     next = i + 1U;
     if (next == NUM_TX_BUF) { next = 0U; }
-    tx_desc[i].Next     = &tx_desc[next];
+    Desc.tx[i].Next     = &Desc.tx[next];
   }
-  ETH->DMATDLAR = (uint32_t)&tx_desc[0];
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_CleanDCache_by_Addr ((void *)Desc.tx, sizeof(Desc.tx));
+  }
+#endif
+  ETH->DMATDLAR = (uint32_t)&Desc.tx[0];
   Emac.tx_index = 0U;
 }
 
@@ -218,8 +362,6 @@ static void init_dma (void) {
   }
 }
 
-
-// TODO AR will use my own library instead of repeating stuff at the infinite
 /**
   \fn          uint32_t crc32_8bit_rev (uint32_t crc32, uint8_t val)
   \brief       Calculate 32-bit CRC (Polynomial: 0x04C11DB7, data bit-reversed).
@@ -259,6 +401,88 @@ static uint32_t crc32_data (const uint8_t *data, uint32_t len) {
   return (crc ^ 0xFFFFFFFFU);
 }
 
+#if (ETH_SMI_SW != 0) /* Software MDIO */
+/**
+  \fn          void SW_MDIO_Dir (uint32_t dir)
+  \brief       Turnaround MDO
+  \param[in]   dir  MDIO direction: 0=input, 1=output
+*/
+static void SW_MDIO_Init (void) {
+  GPIO_InitTypeDef GPIO_InitStruct;
+
+  /* Set MDC as output */
+  GPIO_InitStruct.Pin   = MX_Ethernet_MDC_GPIO_Pin;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(MX_Ethernet_MDC_GPIOx, &GPIO_InitStruct);
+
+  HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_RESET);
+}
+
+/**
+  \fn          void SW_MDIO_Dir (uint32_t dir)
+  \brief       Turnaround MDO
+  \param[in]   dir  MDIO direction: 0=input, 1=output
+*/
+static void SW_MDIO_Dir (uint32_t dir) {
+  GPIO_InitTypeDef GPIO_InitStruct;
+
+  /* Set MDIO as input */
+  GPIO_InitStruct.Pin   = MX_Ethernet_MDIO_GPIO_Pin;
+  GPIO_InitStruct.Mode  = (dir) ? (GPIO_MODE_OUTPUT_PP) : (GPIO_MODE_INPUT);
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(MX_Ethernet_MDIO_GPIOx, &GPIO_InitStruct);
+  
+  if (dir == 0) {
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_RESET);
+  }
+}
+
+/**
+  \fn          void SW_MDIO_Write (uint32_t data, uint32_t len)
+  \brief       Output a data to the MII PHY management interface.
+  \param[in]   data  Data to write
+  \param[in]   len   Data length in bits
+*/
+static void SW_MDIO_Write (uint32_t data, uint32_t len) {
+
+  data <<= (32 - len);
+  for (; len; len--) {
+    /* Set data bit */
+    HAL_GPIO_WritePin (MX_Ethernet_MDIO_GPIOx, MX_Ethernet_MDIO_GPIO_Pin, (data & 0x80000000) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    /* Clock it out */
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_RESET);
+
+    data <<= 1;
+  }
+}
+
+/**
+  \fn          uint32_t SW_MDIO_Read (void)
+  \brief       Read a value from the MII PHY management interface.
+  \return      Data read
+*/
+static uint32_t SW_MDIO_Read (void) {
+  uint32_t i;
+  uint32_t data = 0;
+
+  for (i = 0; i < 16; i++) {
+    data <<= 1;
+    /* Clock in data bit */
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin (MX_Ethernet_MDC_GPIOx, MX_Ethernet_MDC_GPIO_Pin, GPIO_PIN_RESET);
+    if (HAL_GPIO_ReadPin(MX_Ethernet_MDIO_GPIOx, MX_Ethernet_MDIO_GPIO_Pin) == GPIO_PIN_SET) {
+      data |= 1;
+    }
+  }
+  return (data);
+}
+#endif
+
 
 /* Ethernet Driver functions */
 
@@ -288,21 +512,40 @@ static ARM_ETH_MAC_CAPABILITIES GetCapabilities (void) {
   \param[in]   cb_event  Pointer to \ref ARM_ETH_MAC_SignalEvent
   \return      \ref execution_status
 */
-static int32_t Initialize (ARM_ETH_MAC_SignalEvent_t cb_event)
-{
-    /* Enable SYSCFG clock */
-    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+static int32_t Initialize (ARM_ETH_MAC_SignalEvent_t cb_event) {
+#if defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
+  GPIO_InitTypeDef GPIO_InitStruct;
+  const ETH_PIN *io;
+#endif
+
+  /* Enable SYSCFG clock */
+  RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
   #if (ETH_MII == 0)
-    SYSCFG->PMC |=  SYSCFG_PMC_MII_RMII_SEL;
+  SYSCFG->PMC |=  SYSCFG_PMC_MII_RMII_SEL;
   #else
-    SYSCFG->PMC &= ~SYSCFG_PMC_MII_RMII_SEL;
+  SYSCFG->PMC &= ~SYSCFG_PMC_MII_RMII_SEL;
   #endif
 
-    for(int i = 0; i < sizeof(ETH_Pins)/sizeof(IO_ID_e); i++)
-    {
-        IO_PinInit(ETH_Pins[i]);
+  #if defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
+    /* Configure Ethernet pins */
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF11_ETH;
+
+    for (io = eth_pins; io != &eth_pins[sizeof(eth_pins)/sizeof(ETH_PIN)]; io++) {
+      Enable_GPIO_Clock (io->port);
+      GPIO_InitStruct.Pin = io->pin;
+      HAL_GPIO_Init (io->port, &GPIO_InitStruct);
     }
+  #else
+    heth.Instance = ETH;
+  #endif
+  
+  #if (ETH_SMI_SW != 0) /* Software MDIO */
+    SW_MDIO_Init();
+  #endif
 
   /* Clear control structure */
   memset ((void *)&Emac, 0, sizeof (EMAC_CTRL));
@@ -318,13 +561,17 @@ static int32_t Initialize (ARM_ETH_MAC_SignalEvent_t cb_event)
   \brief       De-initialize Ethernet MAC Device.
   \return      \ref execution_status
 */
-static int32_t Uninitialize (void)
-{
-    for(int i = 0; i < sizeof(ETH_Pins)/sizeof(IO_ID_e); i++)
-    {
-       IO_PinInitInput(ETH_Pins[i]);
-    }
+static int32_t Uninitialize (void) {
+#if defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
+  const ETH_PIN *io;
 
+  /* Unconfigure ethernet pins */
+  for (io = eth_pins; io != &eth_pins[sizeof(eth_pins)/sizeof(ETH_PIN)]; io++) {
+    HAL_GPIO_DeInit(io->port, io->pin);
+  }
+#else
+  heth.Instance = NULL;
+#endif
   Emac.flags &= ~EMAC_FLAG_INIT;
 
   return ARM_DRIVER_OK;
@@ -336,148 +583,146 @@ static int32_t Uninitialize (void)
   \param[in]   state  Power state
   \return      \ref execution_status
 */
-static int32_t PowerControl(ARM_POWER_STATE state)
-{
-    uint32_t hclk;
-    uint32_t clkdiv;
+static int32_t PowerControl (ARM_POWER_STATE state) {
+  uint32_t hclk, clkdiv;
 
-    if((state != ARM_POWER_OFF) && (state != ARM_POWER_FULL) && (state != ARM_POWER_LOW))
-    {
-        return ARM_DRIVER_ERROR_UNSUPPORTED;
-    }
+  if ((state != ARM_POWER_OFF)  && 
+      (state != ARM_POWER_FULL) && 
+      (state != ARM_POWER_LOW)) {
+    return ARM_DRIVER_ERROR_UNSUPPORTED;
+  }
 
-    switch(state)
-    {
-        case ARM_POWER_OFF:
-            /* Enable Ethernet clocks */
-            RCC->AHB1ENR |= (RCC_AHB1ENR_ETHMACEN   |
-                             RCC_AHB1ENR_ETHMACTXEN |
-                             RCC_AHB1ENR_ETHMACRXEN
-                           #if (EMAC_TIME_STAMP)
-                           | RCC_AHB1ENR_ETHMACPTPEN
-                           #endif
-                             );
+  switch (state) {
+    case ARM_POWER_OFF:
+      /* Enable Ethernet clocks */
+      __HAL_RCC_ETHMAC_CLK_ENABLE();
+      __HAL_RCC_ETHMACTX_CLK_ENABLE();
+      __HAL_RCC_ETHMACRX_CLK_ENABLE();
+      #if (EMAC_TIME_STAMP)
+      __HAL_RCC_ETHMACPTP_CLK_ENABLE();
+      #endif
 
-            /* Reset Ethernet MAC peripheral */
-            RCC->AHB1RSTR |=  RCC_AHB1RSTR_ETHMACRST;
-            __NOP(); __NOP(); __NOP(); __NOP();
-            RCC->AHB1RSTR &= ~RCC_AHB1RSTR_ETHMACRST;
+      /* Reset Ethernet MAC peripheral */
+      __HAL_RCC_ETHMAC_FORCE_RESET();
+      __NOP(); __NOP(); __NOP(); __NOP();
+      __HAL_RCC_ETHMAC_RELEASE_RESET();
 
-            /* Disable ethernet interrupts */
-            NVIC_DisableIRQ(ETH_IRQn);
-            ETH->DMAIER  = 0;
-            ETH->PTPTSCR = 0;
-
-            /* Disable Ethernet clocks */
-            RCC->AHB1ENR &= ~(RCC_AHB1ENR_ETHMACEN   |
-                              RCC_AHB1ENR_ETHMACTXEN |
-                              RCC_AHB1ENR_ETHMACRXEN
-                            #if (EMAC_TIME_STAMP)
-                            | RCC_AHB1ENR_ETHMACPTPEN
-                            #endif
-                              );
-
-            Emac.flags &= ~(EMAC_FLAG_POWER | EMAC_FLAG_DMA_INIT);
-        break;
-
-        case ARM_POWER_LOW:
-            return ARM_DRIVER_ERROR_UNSUPPORTED;
-
-        case ARM_POWER_FULL:
-            if((Emac.flags & EMAC_FLAG_INIT) == 0)
-            {
-                /* Driver not initialized */
-                return ARM_DRIVER_ERROR;
-            }
-
-            if((Emac.flags & EMAC_FLAG_POWER) != 0)
-            {
-                /* Driver already powered */
-                break;
-            }
-
-            /* Enable Ethernet clocks */
-            RCC->AHB1ENR |= (RCC_AHB1ENR_ETHMACEN   |
-                             RCC_AHB1ENR_ETHMACTXEN |
-                             RCC_AHB1ENR_ETHMACRXEN
-                           #if (EMAC_TIME_STAMP)
-                           | RCC_AHB1ENR_ETHMACPTPEN
-                           #endif
-                             );
-
-            /* Reset Ethernet MAC peripheral */
-            RCC->AHB1RSTR |=  RCC_AHB1RSTR_ETHMACRST;
-            __NOP(); __NOP(); __NOP(); __NOP();
-            RCC->AHB1RSTR &= ~RCC_AHB1RSTR_ETHMACRST;
-
-            /* MDC clock range selection */
-          #if   (SYS_HCLK_CLOCK_FREQUENCY >= 150000000)
-            clkdiv = ETH_MACMIIAR_CR_Div102;
-          #elif (SYS_HCLK_CLOCK_FREQUENCY >= 100000000)
-            clkdiv = ETH_MACMIIAR_CR_Div62;
-          #elif (SYS_HCLK_CLOCK_FREQUENCY >= 60000000)
-            clkdiv = ETH_MACMIIAR_CR_Div42;
-          #elif (SYS_HCLK_CLOCK_FREQUENCY >= 35000000)
-            clkdiv = ETH_MACMIIAR_CR_Div26;
-          #elif (SYS_HCLK_CLOCK_FREQUENCY >= 25000000)
-            clkdiv = ETH_MACMIIAR_CR_Div16;
-          #else
-           #pragma message "XSTR(SYS_HCLK_CLOCK_FREQUENCY)"
-           #error CPU Core HCLK is too slow for Ethernet!
-          #endif
-
-            ETH->MACMIIAR = clkdiv;
-
-            /* Initialize MAC configuration */
-            ETH->MACCR = ETH_MACCR_ROD | 0x00008000U;
-
-            /* Initialize Filter registers */
-            ETH->MACFFR = ETH_MACFFR_BFD;
-            ETH->MACFCR = ETH_MACFCR_ZQPD;
-
-            /* Initialize Address registers */
-            ETH->MACA0HR = 0; ETH->MACA0LR = 0;
-            ETH->MACA1HR = 0; ETH->MACA1LR = 0;
-            ETH->MACA2HR = 0; ETH->MACA2LR = 0;
-            ETH->MACA3HR = 0; ETH->MACA3LR = 0;
-
-            /* Mask timestamp interrupts */
-            ETH->MACIMR |= ETH_MACIMR_TSTIM | ETH_MACIMR_PMTIM;
-
-          #if (EMAC_TIME_STAMP)
-            /* Set clock accuracy to 20ns (50MHz) or 50ns (20MHz) */
-            if(hclk >= 51000000)
-            {
-                ETH->PTPSSIR = 20;
-                ETH->PTPTSAR = (50000000ull << 32) / hclk;
-            }
-            else
-            {
-                ETH->PTPSSIR = 50;
-                ETH->PTPTSAR = (20000000ull << 32) / hclk;
-            }
-
-            ETH->PTPTSCR = ETH_PTPTSSR_TSSIPV4FE | ETH_PTPTSSR_TSSIPV6FE | ETH_PTPTSSR_TSSSR |
-                                                                           ETH_PTPTSCR_TSARU |
-                                                                           ETH_PTPTSCR_TSFCU |
-                                                                           ETH_PTPTSCR_TSE;
-            Emac.tx_ts_index  = 0;
-          #endif
-
-            /* Disable MMC interrupts */
-            ETH->MMCTIMR = ETH_MMCTIMR_TGFM  | ETH_MMCTIMR_TGFMSCM | ETH_MMCTIMR_TGFSCM;
-            ETH->MMCRIMR = ETH_MMCRIMR_RGUFM | ETH_MMCRIMR_RFAEM   | ETH_MMCRIMR_RFCEM;
-
-            NVIC_ClearPendingIRQ (ETH_IRQn);
-            NVIC_EnableIRQ (ETH_IRQn);
-
-            Emac.frame_end = NULL;
-            Emac.flags    |= EMAC_FLAG_POWER;
+      #if defined(RTE_DEVICE_FRAMEWORK_CUBE_MX)
+        if (heth.Instance != NULL) {
+          HAL_ETH_MspDeInit (&heth);
         }
-        break;
-    }
+      #else
+      /* Disable ethernet interrupts */
+      NVIC_DisableIRQ(ETH_IRQn);
+      ETH->DMAIER  = 0U;
+      ETH->PTPTSCR = 0U;
 
-    return ARM_DRIVER_OK;
+      /* Disable Ethernet clocks */
+      __HAL_RCC_ETHMAC_CLK_DISABLE();
+      __HAL_RCC_ETHMACTX_CLK_DISABLE();
+      __HAL_RCC_ETHMACRX_CLK_DISABLE();
+      #if (EMAC_TIME_STAMP)
+      __HAL_RCC_ETHMACPTP_CLK_DISABLE();
+      #endif
+      #endif
+
+      Emac.flags &= ~(EMAC_FLAG_POWER | EMAC_FLAG_DMA_INIT);
+      break;
+
+    case ARM_POWER_LOW:
+      return ARM_DRIVER_ERROR_UNSUPPORTED;
+
+    case ARM_POWER_FULL:
+      if ((Emac.flags & EMAC_FLAG_INIT)  == 0U) {
+        /* Driver not initialized */
+        return ARM_DRIVER_ERROR;
+      }
+      if ((Emac.flags & EMAC_FLAG_POWER) != 0U) {
+        /* Driver already powered */
+        break;
+      }
+      #if defined(RTE_DEVICE_FRAMEWORK_CUBE_MX)
+        HAL_ETH_MspInit (&heth);
+      #else
+      /* Enable Ethernet clocks */
+      __HAL_RCC_ETHMAC_CLK_ENABLE();
+      __HAL_RCC_ETHMACTX_CLK_ENABLE();
+      __HAL_RCC_ETHMACRX_CLK_ENABLE();
+      #if (EMAC_TIME_STAMP)
+      __HAL_RCC_ETHMACPTP_CLK_ENABLE();
+      #endif
+      #endif
+
+      /* Reset Ethernet MAC peripheral */
+      __HAL_RCC_ETHMAC_FORCE_RESET();
+      __NOP(); __NOP(); __NOP(); __NOP();
+      __HAL_RCC_ETHMAC_RELEASE_RESET();
+
+      /* MDC clock range selection */
+      hclk = HAL_RCC_GetHCLKFreq();
+
+      if (hclk >= 150000000U) {
+        clkdiv = ETH_MACMIIAR_CR_Div102;
+      } else if (hclk >= 100000000U) {
+        clkdiv = ETH_MACMIIAR_CR_Div62;
+      } else if (hclk >= 60000000U) {
+        clkdiv = ETH_MACMIIAR_CR_Div42;
+      } else if (hclk >= 35000000U) {
+        clkdiv = ETH_MACMIIAR_CR_Div26;
+      } else if (hclk >= 25000000U) {
+        clkdiv = ETH_MACMIIAR_CR_Div16;
+      } else {
+        /* HCLK is too slow for Ethernet */
+        return (ARM_DRIVER_ERROR);
+      }
+      ETH->MACMIIAR = clkdiv;
+
+      /* Initialize MAC configuration */
+      ETH->MACCR   = ETH_MACCR_ROD | 0x00008000U;
+
+      /* Initialize Filter registers */
+      ETH->MACFFR  = ETH_MACFFR_BFD;
+      ETH->MACFCR  = ETH_MACFCR_ZQPD;
+
+      /* Initialize Address registers */
+      ETH->MACA0HR = 0U; ETH->MACA0LR = 0U;
+      ETH->MACA1HR = 0U; ETH->MACA1LR = 0U;
+      ETH->MACA2HR = 0U; ETH->MACA2LR = 0U;
+      ETH->MACA3HR = 0U; ETH->MACA3LR = 0U;
+
+      /* Mask timestamp interrupts */
+      ETH->MACIMR |= ETH_MACIMR_TSTIM | ETH_MACIMR_PMTIM;
+
+      #if (EMAC_TIME_STAMP)
+      ETH->PTPTSCR = ETH_PTPTSCR_TSE;
+
+      hclk = HAL_RCC_GetSysClockFreq();
+      ETH->PTPSSIR = (uint32_t)((1000000000ULL + hclk - 1)/ hclk);
+      ETH->PTPTSAR = (uint32_t)((1000000000ULL << 32) / (hclk * ETH->PTPSSIR));
+
+      ETH->PTPTSCR = ETH_PTPTSSR_TSSIPV4FE | ETH_PTPTSSR_TSSIPV6FE | ETH_PTPTSSR_TSSSR |
+                                                                     ETH_PTPTSCR_TSARU |
+                                                                     ETH_PTPTSCR_TSSTI |
+                                                                     ETH_PTPTSCR_TSFCU |
+                                                                     ETH_PTPTSCR_TSE;
+      Emac.tx_ts_index = 0U;
+      #endif
+
+      /* Disable MMC interrupts */
+      ETH->MMCTIMR = ETH_MMCTIMR_TGFM  | ETH_MMCTIMR_TGFMSCM | ETH_MMCTIMR_TGFSCM;
+      ETH->MMCRIMR = ETH_MMCRIMR_RGUFM | ETH_MMCRIMR_RFAEM   | ETH_MMCRIMR_RFCEM;
+
+      #if defined(RTE_DEVICE_FRAMEWORK_CLASSIC)
+      NVIC_ClearPendingIRQ (ETH_IRQn);
+      NVIC_EnableIRQ (ETH_IRQn);
+      #endif
+
+      Emac.frame_end = NULL;
+      Emac.flags    |= EMAC_FLAG_POWER;
+      break;
+  }
+
+  return ARM_DRIVER_OK;
 }
 
 /**
@@ -631,16 +876,21 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
 
   if (dst == NULL) {
     /* Start of a new transmit frame */
-    if (tx_desc[Emac.tx_index].CtrlStat & DMA_TX_OWN) {
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+    if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+      SCB_InvalidateDCache_by_Addr (&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
+    }
+#endif
+    if (Desc.tx[Emac.tx_index].CtrlStat & DMA_TX_OWN) {
       /* Transmitter is busy, wait */
       return ARM_DRIVER_ERROR_BUSY;
     }
-    dst = tx_desc[Emac.tx_index].Addr;
-    tx_desc[Emac.tx_index].Size = len;
+    dst = Desc.tx[Emac.tx_index].Addr;
+    Desc.tx[Emac.tx_index].Size = len;
   }
   else {
     /* Sending data fragments in progress */
-    tx_desc[Emac.tx_index].Size += len;
+    Desc.tx[Emac.tx_index].Size += len;
   }
   /* Fast-copy data fragments to ETH-DMA buffer */
   for ( ; len > 7U; dst += 8, frame += 8, len -= 8U) {
@@ -660,7 +910,7 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
   }
 
   /* Frame is now ready, send it to DMA */
-  ctrl = tx_desc[Emac.tx_index].CtrlStat & ~DMA_TX_CIC;
+  ctrl = Desc.tx[Emac.tx_index].CtrlStat & ~DMA_TX_CIC;
 #if (EMAC_CHECKSUM_OFFLOAD != 0)
   if (Emac.tx_cks_offload) {
     /* The following is a workaround for EMAC silicon problem:       */
@@ -671,8 +921,8 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
     /*   is IPv4 frame fragment, then the MAC may incorrectly insert */
     /*   checksum into the packet. This corrupts the payload data    */
     /*   and generates checksum errors at the receiver.              */
-    uint16_t prot = __UNALIGNED_UINT16_READ(&tx_desc[Emac.tx_index].Addr[12]);
-    uint16_t frag = __UNALIGNED_UINT16_READ(&tx_desc[Emac.tx_index].Addr[20]);
+    uint16_t prot = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[12]);
+    uint16_t frag = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[20]);
     if ((prot == 0x0008) && (frag & 0xFF3F)) {
       /* Insert only IP header checksum in fragmented frame */
       ctrl |= DMA_TX_CIC_IP;
@@ -689,15 +939,26 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
   if (flags & ARM_ETH_MAC_TX_FRAME_TIMESTAMP) { ctrl |= DMA_TX_TTSE; }
   Emac.tx_ts_index = Emac.tx_index;
 #endif
-  tx_desc[Emac.tx_index].CtrlStat = ctrl | DMA_TX_OWN;
+  __DMB();
+  Desc.tx[Emac.tx_index].CtrlStat = ctrl | DMA_TX_OWN;
+  __DMB();
+
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_CleanDCache_by_Addr ((uint8_t *)Desc.tx[Emac.tx_index].Addr, ETH_BUF_SIZE);
+    SCB_CleanDCache_by_Addr ((uint32_t *)&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
+  }
+#endif
 
   Emac.tx_index++;
   if (Emac.tx_index == NUM_TX_BUF) { Emac.tx_index = 0U; }
   Emac.frame_end = NULL;
 
-  /* Start frame transmission */
-  ETH->DMASR   = ETH_DMASR_TPSS;
-  ETH->DMATPDR = 0U;
+  if ((ETH->DMASR & ETH_DMASR_TBUS) != 0U) {
+    /* Transmit buffer unavailable, resume DMA */
+    ETH->DMASR   = ETH_DMASR_TBUS;
+    ETH->DMATPDR = 0;
+  }
 
   return ARM_DRIVER_OK;
 }
@@ -709,10 +970,10 @@ static int32_t SendFrame (const uint8_t *frame, uint32_t len, uint32_t flags) {
   \param[in]   len    Frame buffer length in bytes
   \return      number of data bytes read or execution status
                  - value >= 0: number of data bytes read
-                 - value < 0: error occurred, value is execution status as defined with \ref execution_status
+                 - value < 0: error occurred, value is execution status as defined with \ref execution_status 
 */
 static int32_t ReadFrame (uint8_t *frame, uint32_t len) {
-  uint8_t const *src = rx_desc[Emac.rx_index].Addr;
+  uint8_t const *src = Desc.rx[Emac.rx_index].Addr;
   int32_t cnt        = (int32_t)len;
 
   if ((frame == NULL) && (len != 0U)) {
@@ -722,6 +983,12 @@ static int32_t ReadFrame (uint8_t *frame, uint32_t len) {
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return ARM_DRIVER_ERROR;
   }
+
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_InvalidateDCache_by_Addr ((void *)(uint32_t)src, ETH_BUF_SIZE);
+  }
+#endif
 
   /* Fast-copy data to frame buffer */
   for ( ; len > 7U; frame += 8, src += 8, len -= 8U) {
@@ -735,7 +1002,14 @@ static int32_t ReadFrame (uint8_t *frame, uint32_t len) {
   if (len > 0U) { frame[0] = src[0]; }
 
   /* Return this block back to ETH-DMA */
-  rx_desc[Emac.rx_index].Stat = DMA_RX_OWN;
+  __DMB();
+  Desc.rx[Emac.rx_index].Stat = DMA_RX_OWN;
+  __DMB();
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_CleanDCache_by_Addr ((uint32_t *)&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
+  }
+#endif
 
   Emac.rx_index++;
   if (Emac.rx_index == NUM_RX_BUF) { Emac.rx_index = 0; }
@@ -754,12 +1028,19 @@ static int32_t ReadFrame (uint8_t *frame, uint32_t len) {
   \return      number of bytes in received frame
 */
 static uint32_t GetRxFrameSize (void) {
-  uint32_t stat = rx_desc[Emac.rx_index].Stat;
+  volatile uint32_t stat;
 
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return (0U);
   }
 
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_InvalidateDCache_by_Addr (&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
+  }
+#endif
+
+  stat = Desc.rx[Emac.rx_index].Stat;
   if (stat & DMA_RX_OWN) {
     /* Owned by DMA */
     return (0U);
@@ -781,11 +1062,17 @@ static uint32_t GetRxFrameSize (void) {
 */
 static int32_t GetRxFrameTime (ARM_ETH_MAC_TIME *time) {
 #if (EMAC_TIME_STAMP)
-  RX_Desc *rxd = &rx_desc[Emac.rx_index];
+  volatile RX_Desc *rxd = &Desc.rx[Emac.rx_index];
 
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return ARM_DRIVER_ERROR;
   }
+
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_InvalidateDCache_by_Addr (&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
+  }
+#endif
 
   if (rxd->Stat & DMA_RX_OWN) {
     /* Owned by DMA */
@@ -809,11 +1096,17 @@ static int32_t GetRxFrameTime (ARM_ETH_MAC_TIME *time) {
 */
 static int32_t GetTxFrameTime (ARM_ETH_MAC_TIME *time) {
 #if (EMAC_TIME_STAMP)
-  TX_Desc *txd = &tx_desc[Emac.tx_ts_index];
+  volatile TX_Desc *txd = &Desc.tx[Emac.tx_ts_index];
 
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return ARM_DRIVER_ERROR;
   }
+
+#if (EMAC_DCACHE_MAINTENANCE == 1U)
+  if ((SCB->CCR & SCB_CCR_DC_Msk) != 0U) {
+    SCB_InvalidateDCache_by_Addr (&Desc.tx[Emac.tx_ts_index], sizeof(TX_Desc);
+  }
+#endif
 
   if (txd->CtrlStat & DMA_RX_OWN) {
     /* Owned by DMA */
@@ -844,11 +1137,11 @@ static int32_t ControlTimer (uint32_t control, ARM_ETH_MAC_TIME *time) {
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return ARM_DRIVER_ERROR;
   }
-  if ((control != ARM_ETH_MAC_TIMER_GET_TIME)     &&
-      (control != ARM_ETH_MAC_TIMER_SET_TIME)     &&
-      (control != ARM_ETH_MAC_TIMER_INC_TIME)     &&
-      (control != ARM_ETH_MAC_TIMER_DEC_TIME)     &&
-      (control != ARM_ETH_MAC_TIMER_SET_ALARM)    &&
+  if ((control != ARM_ETH_MAC_TIMER_GET_TIME)     && 
+      (control != ARM_ETH_MAC_TIMER_SET_TIME)     && 
+      (control != ARM_ETH_MAC_TIMER_INC_TIME)     && 
+      (control != ARM_ETH_MAC_TIMER_DEC_TIME)     && 
+      (control != ARM_ETH_MAC_TIMER_SET_ALARM)    && 
       (control != ARM_ETH_MAC_TIMER_ADJUST_CLOCK)) {
     return ARM_DRIVER_ERROR_PARAMETER;
   }
@@ -934,11 +1227,11 @@ static int32_t Control (uint32_t control, uint32_t arg) {
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
     return ARM_DRIVER_ERROR;
   }
-  if ((control != ARM_ETH_MAC_CONFIGURE)   &&
-      (control != ARM_ETH_MAC_CONTROL_TX)  &&
-      (control != ARM_ETH_MAC_CONTROL_RX)  &&
-      (control != ARM_ETH_MAC_FLUSH)       &&
-      (control != ARM_ETH_MAC_SLEEP)       &&
+  if ((control != ARM_ETH_MAC_CONFIGURE)   && 
+      (control != ARM_ETH_MAC_CONTROL_TX)  && 
+      (control != ARM_ETH_MAC_CONTROL_RX)  && 
+      (control != ARM_ETH_MAC_FLUSH)       && 
+      (control != ARM_ETH_MAC_SLEEP)       && 
       (control != ARM_ETH_MAC_VLAN_FILTER)) {
     return ARM_DRIVER_ERROR_PARAMETER;
   }
@@ -1076,6 +1369,7 @@ static int32_t Control (uint32_t control, uint32_t arg) {
   \return      \ref execution_status
 */
 static int32_t PHY_Read (uint8_t phy_addr, uint8_t reg_addr, uint16_t *data) {
+#if (ETH_SMI_SW == 0) /* Hardware MDIO */
   uint32_t val, tick;
 
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
@@ -1099,7 +1393,38 @@ static int32_t PHY_Read (uint8_t phy_addr, uint8_t reg_addr, uint16_t *data) {
   }
 
   return ARM_DRIVER_ERROR_TIMEOUT;
+
+#else /* Software MDIO */
+  if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
+    return ARM_DRIVER_ERROR;
+  }
+
+  SW_MDIO_Dir (1); /* Dir: output */
+  /* 32 consecutive ones on MDO to establish sync */
+  SW_MDIO_Write (0xFFFFFFFF, 32);
+
+  /* Start code (01), Read command (10) */
+  SW_MDIO_Write (0x06, 4);
+
+  /* Write PHY device address */
+  SW_MDIO_Write (phy_addr, 5);
+
+  /* Write PHY register address */
+  SW_MDIO_Write (reg_addr, 5);
+
+  /* Turnaround MDO is tristated */
+  SW_MDIO_Dir (0); /* Dir: input */
+
+  /* Read the data value */
+  *data = (uint16_t)SW_MDIO_Read ();
+
+  /* Turnaround MDIO is tristated */
+  SW_MDIO_Dir (0); /* Dir: input */
+
+  return ARM_DRIVER_OK;
+#endif
 }
+
 
 /**
   \fn          int32_t PHY_Write (uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
@@ -1110,6 +1435,7 @@ static int32_t PHY_Read (uint8_t phy_addr, uint8_t reg_addr, uint16_t *data) {
   \return      \ref execution_status
 */
 static int32_t PHY_Write (uint8_t phy_addr, uint8_t reg_addr, uint16_t data) {
+#if (ETH_SMI_SW == 0) /* Hardware MDIO */
   uint32_t val, tick;
 
   if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
@@ -1132,6 +1458,37 @@ static int32_t PHY_Write (uint8_t phy_addr, uint8_t reg_addr, uint16_t data) {
   }
 
   return ARM_DRIVER_ERROR_TIMEOUT;
+
+#else /* Software MDIO */
+  if ((Emac.flags & EMAC_FLAG_POWER) == 0U) {
+    return ARM_DRIVER_ERROR;
+  }
+
+  SW_MDIO_Dir (1); /* Dir: output */
+
+  /* 32 consecutive ones on MDO to establish sync */
+  SW_MDIO_Write (0xFFFFFFFF, 32);
+
+  /* Start code (01), Write command (01) */
+  SW_MDIO_Write (0x05, 4);
+
+  /* Write PHY device address */
+  SW_MDIO_Write (phy_addr, 5);
+
+  /* Write PHY register address */
+  SW_MDIO_Write (reg_addr, 5);
+
+  /* Turnaround MDIO (1,0)*/
+  SW_MDIO_Write (0x02, 2);
+
+  /* Write the data value */
+  SW_MDIO_Write (data, 16);
+
+  /* Turnaround MDO is tristated */
+  SW_MDIO_Dir (0); /* Dir: input */
+
+  return ARM_DRIVER_OK;
+#endif
 }
 
 
@@ -1174,8 +1531,7 @@ void ETH_IRQHandler (void) {
 
 
 /* MAC Driver Control Block */
-ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_(ETH_MAC_NUM) =
-{
+ARM_DRIVER_ETH_MAC Driver_ETH_MAC0 = {
   GetVersion,
   GetCapabilities,
   Initialize,
