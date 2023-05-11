@@ -10,15 +10,15 @@ Configuration tab
      - GPIO Settings: review settings, no changes required
           Pin Name | Signal on Pin | GPIO mode | GPIO Pull-up/Pull..| Maximum out |
           :--------|:--------------|:----------|:-------------------|:------------|
-          PA1      | ETH_REF_CLK   | Alternate | No pull-up and no..| Very High   |
-          PA2      | ETH_MDIO      | Alternate | No pull-up and no..| Very High   |
-          PA7      | ETH_CRS_DV    | Alternate | No pull-up and no..| Very High   |
-          PC1      | ETH_MDC       | Alternate | No pull-up and no..| Very High   |
-          PC4      | ETH_RXD0      | Alternate | No pull-up and no..| Very High   |
-          PC5      | ETH_RXD1      | Alternate | No pull-up and no..| Very High   |
-          PG11     | ETH_TX_EN     | Alternate | No pull-up and no..| Very High   |
-          PG13     | ETH_TXD0      | Alternate | No pull-up and no..| Very High   |
-          PG14     | ETH_TXD1      | Alternate | No pull-up and no..| Very High   |
+          PA1      | ETH_REF_CLK   | Alternate | No pull-up and no..| High        |
+          PA2      | ETH_MDIO      | Alternate | No pull-up and no..| High        |
+          PA7      | ETH_CRS_DV    | Alternate | No pull-up and no..| High        |
+          PC1      | ETH_MDC       | Alternate | No pull-up and no..| High        |
+          PC4      | ETH_RXD0      | Alternate | No pull-up and no..| High        |
+          PC5      | ETH_RXD1      | Alternate | No pull-up and no..| High        |
+          PG11     | ETH_TX_EN     | Alternate | No pull-up and no..| High        |
+          PG13     | ETH_TXD0      | Alternate | No pull-up and no..| High        |
+          PG14     | ETH_TXD1      | Alternate | No pull-up and no..| High        |
 
      - NVIC Settings: enable interrupts
           Interrupt Table                      | Enable | Preemption Priority | Sub Priority
@@ -39,8 +39,6 @@ Configuration tab
 
 #include "EMAC_STM32F4xx.h"
 #include "lib_digini.h"
-//#include "lib_io.h"
-
 
 #define ARM_ETH_MAC_DRV_VERSION ARM_DRIVER_VERSION_MAJOR_MINOR(1,0)     /* driver version */
 
@@ -148,6 +146,7 @@ static const ARM_ETH_MAC_CAPABILITIES DriverCapabilities =
 /* Local variables */
 static EMAC_CTRL Emac;
 
+/* Ethernet DMA Descriptor/Buffer memory */
 static RX_Desc   rx_desc[NUM_RX_BUF];
 static TX_Desc   tx_desc[NUM_TX_BUF];
 static uint32_t  rx_buf [NUM_RX_BUF][ETH_BUF_SIZE >> 2];
@@ -171,7 +170,7 @@ static void init_rx_desc (void) {
   }
 
   ETH->DMARDLAR = (uint32_t)&rx_desc[0];
-  Emac.rx_index = 0U;
+  Emac.rx_index = 0;
 }
 
 /**
@@ -186,11 +185,11 @@ static void init_tx_desc (void) {
     tx_desc[i].CtrlStat = DMA_TX_TCH | DMA_TX_LS | DMA_TX_FS;
     tx_desc[i].Addr     = (uint8_t *)&tx_buf[i];
     next = i + 1U;
-    if (next == NUM_TX_BUF) { next = 0U; }
+    if (next == NUM_TX_BUF) { next = 0; }
     tx_desc[i].Next     = &tx_desc[next];
   }
   ETH->DMATDLAR = (uint32_t)&tx_desc[0];
-  Emac.tx_index = 0U;
+  Emac.tx_index = 0;
 }
 
 /**
@@ -318,7 +317,7 @@ static int32_t Initialize (ARM_ETH_MAC_SignalEvent_t cb_event)
   \brief       De-initialize Ethernet MAC Device.
   \return      \ref execution_status
 */
-static int32_t Uninitialize (void)
+static int32_t Uninitialize(void)
 {
     for(int i = 0; i < sizeof(ETH_Pins)/sizeof(IO_ID_e); i++)
     {
@@ -422,8 +421,8 @@ static int32_t PowerControl(ARM_POWER_STATE state)
           #elif (SYS_HCLK_CLOCK_FREQUENCY >= 25000000)
             clkdiv = ETH_MACMIIAR_CR_Div16;
           #else
-           #pragma message "XSTR(SYS_HCLK_CLOCK_FREQUENCY)"
-           #error CPU Core HCLK is too slow for Ethernet!
+            #pragma message "XSTR(SYS_HCLK_CLOCK_FREQUENCY)"
+            #error CPU Core HCLK is too slow for Ethernet!
           #endif
 
             ETH->MACMIIAR = clkdiv;
@@ -473,7 +472,6 @@ static int32_t PowerControl(ARM_POWER_STATE state)
 
             Emac.frame_end = NULL;
             Emac.flags    |= EMAC_FLAG_POWER;
-        }
         break;
     }
 
@@ -1174,7 +1172,7 @@ void ETH_IRQHandler (void) {
 
 
 /* MAC Driver Control Block */
-ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_(ETH_MAC_NUM) =
+ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_0 =
 {
   GetVersion,
   GetCapabilities,

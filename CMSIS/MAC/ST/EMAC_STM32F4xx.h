@@ -21,6 +21,7 @@
  * $Revision:    V2.11
  *
  * Project:      Ethernet Media Access (MAC) Definitions for STM32F4xx
+ * Note:         Highly modified to work with Digini framework
  * -------------------------------------------------------------------------- */
 
 #ifndef __EMAC_STM32F4XX_H
@@ -112,5 +113,5 @@ typedef struct {
 } EMAC_CTRL;
 
 // Global functions and variables exported by driver .c module
-extern ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_(ETH_MAC_NUM);
+extern ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_0;
 #endif /* __EMAC_STM32F4XX_H */
