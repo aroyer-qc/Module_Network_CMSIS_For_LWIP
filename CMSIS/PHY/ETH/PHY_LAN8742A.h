@@ -105,4 +105,6 @@ typedef struct phy_ctrl {
   uint8_t             rsvd;             /* Reserved                          */
 } PHY_CTRL;
 
+extern ARM_DRIVER_ETH_PHY Driver_ETH_PHY0;
+
 #endif /* __PHY_LAN8742A_H */

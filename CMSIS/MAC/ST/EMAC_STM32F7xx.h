@@ -44,35 +44,22 @@
 #include "Driver_ETH_MAC.h"
 //#include "stm32f7xx_hal.h"
 
-    // TODO move this to config
-    #define USE_ETH_RMII  DEF_ENABLED
+// TODO move this to config
+#define USE_ETH_RMII  DEF_ENABLED
+
+/* Software controlled SMI */
+//#define ETH_SMI_SW              1
+/* Hardware controlled SMI */
+#define ETH_SMI_SW              0
 
 
-  #if defined (EMAC_DMA_MEMORY_ADDRESS)
-  /* Use user specified DMA memory address */
-  #warning "Using EMAC_DMA_MEMORY_ADDRESS definition to override RTE_Device.h setting!"
-  #else
-  /* Use RTE_Device.h specified DMA memory address */
-  #define EMAC_DMA_MEMORY_ADDR      RTE_ETH_DMA_MEM_ADDR
-  #endif
+/* Buffer descriptor default memory address */
+#define EMAC_DMA_MEMORY_ADDR    0x2000C000
 
-    /* Software controlled SMI */
-    //#define ETH_SMI_SW              1
-    /* Hardware controlled SMI */
-    #define ETH_SMI_SW              0
-
-
-  /* Buffer descriptor default memory address */
-  #if !defined(EMAC_DMA_MEMORY_ADDRESS)
-    #define EMAC_DMA_MEMORY_ADDR    0x2000C000
-  #endif
-
-  #endif
-    /* Software controlled SMI */
+/* Software controlled SMI */
 //    #define ETH_SMI_SW          1
-    /* Hardware controlled SMI */
-    #define ETH_SMI_SW          0
-#endif
+/* Hardware controlled SMI */
+#define ETH_SMI_SW          0
 
 /* EMAC Driver state flags */
 #define EMAC_FLAG_INIT      (1 << 0)    // Driver initialized
@@ -176,29 +163,22 @@ typedef struct rx_desc {
 } RX_Desc;
 
 
-/* Ethernet pin description */
-typedef struct _ETH_PIN {
-  GPIO_TypeDef *port;
-  uint16_t      pin;
-  uint16_t      reserved;
-} ETH_PIN;
-
-
 /* EMAC driver control structure */
-typedef struct {
-  ARM_ETH_MAC_SignalEvent_t cb_event;   // Event callback
-  uint8_t       flags;                  // Control and state flags
-  uint8_t       tx_index;               // Transmit descriptor index
-  uint8_t       rx_index;               // Receive descriptor index
-#if (EMAC_CHECKSUM_OFFLOAD)
-  bool          tx_cks_offload;         // Checksum offload enabled/disabled
-#endif
-#if (EMAC_TIME_STAMP)
-  uint8_t       tx_ts_index;            // Transmit Timestamp descriptor index
-#if (EMAC_CHECKSUM_OFFLOAD)
-  uint8_t       reserved[3];            // Reserved
-#endif
-#endif
+typedef struct
+{
+    ARM_ETH_MAC_SignalEvent_t cb_event;   // Event callback
+    uint8_t       flags;                  // Control and state flags
+    uint8_t       tx_index;               // Transmit descriptor index
+    uint8_t       rx_index;               // Receive descriptor index
+  #if (EMAC_CHECKSUM_OFFLOAD)
+    bool          tx_cks_offload;         // Checksum offload enabled/disabled
+  #endif
+  #if (EMAC_TIME_STAMP)
+    uint8_t       tx_ts_index;            // Transmit Timestamp descriptor index
+   #if (EMAC_CHECKSUM_OFFLOAD)
+    uint8_t       reserved[3];            // Reserved
+   #endif
+  #endif
   uint8_t      *frame_end;              // End of assembled frame fragments
 } EMAC_CTRL;
 

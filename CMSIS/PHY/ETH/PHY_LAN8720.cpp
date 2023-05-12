@@ -284,7 +284,7 @@ static ARM_ETH_LINK_INFO GetLinkInfo (void) {
 
 
 /* PHY Driver Control Block */
-ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY_(ETH_PHY_NUM) = {
+ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY0 = {
   GetVersion,
   Initialize,
   Uninitialize,

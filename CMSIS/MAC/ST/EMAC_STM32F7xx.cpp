@@ -27,6 +27,24 @@ Configuration tab
 
 */
 
+#ifndef   __UNALIGNED_UINT32        /* deprecated */
+  #define __UNALIGNED_UINT32(x)                  (*((__packed uint32_t *)(x)))
+#endif
+#ifndef   __UNALIGNED_UINT16_WRITE
+  #define __UNALIGNED_UINT16_WRITE(addr, val)    ((*((__packed uint16_t *)(addr))) = (val))
+#endif
+#ifndef   __UNALIGNED_UINT16_READ
+  #define __UNALIGNED_UINT16_READ(addr)          (*((const __packed uint16_t *)(addr)))
+#endif
+#ifndef   __UNALIGNED_UINT32_WRITE
+  #define __UNALIGNED_UINT32_WRITE(addr, val)    ((*((__packed uint32_t *)(addr))) = (val))
+#endif
+#ifndef   __UNALIGNED_UINT32_READ
+  #define __UNALIGNED_UINT32_READ(addr)          (*((const __packed uint32_t *)(addr)))
+#endif
+
+
+
 // to be evaluated at run time
 // Pre-calculated value
 //#define ETH_PTPSSIR_VALUE = (uint32_t)((1000000000ULL + SYS_HCLK_CLOCK_FREQUENCY - 1)/ SYS_HCLK_CLOCK_FREQUENCY)
@@ -125,7 +143,7 @@ static const ARM_ETH_MAC_CAPABILITIES DriverCapabilities =
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_udp  */
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_tcp  */
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_icmp */
-    (ETH_MII != 0) ?
+    (USE_ETH_RMII == DEF_DISABLED) ?
     ARM_ETH_INTERFACE_MII :
     ARM_ETH_INTERFACE_RMII,                   /* media_interface          */
     0U,                                       /* mac_address              */
@@ -176,10 +194,10 @@ static void init_rx_desc(void)
   #if (EMAC_DCACHE_MAINTENANCE == 1)
     if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
     {
-        SCB_CleanDCache_by_Addr((void *)Desc.rx, sizeof(Desc.rx));
+        SCB_CleanDCache_by_Addr((uint32_t*)Desc.rx, sizeof(Desc.rx));
     }
   #endif
-    
+
     ETH->DMARDLAR = (uint32_t)&Desc.rx[0];
     Emac.rx_index = 0;
 }
@@ -198,22 +216,22 @@ static void init_tx_desc(void)
         Desc.tx[i].CtrlStat = DMA_TX_TCH | DMA_TX_LS | DMA_TX_FS;
         Desc.tx[i].Addr     = (uint8_t *)&Desc.tx_buf[i];
         next = i + 1U;
-        
+
         if(next == NUM_TX_BUF)
         {
             next = 0;
         }
-        
+
         Desc.tx[i].Next = &Desc.tx[next];
     }
 
   #if (EMAC_DCACHE_MAINTENANCE == 1)
     if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
     {
-        SCB_CleanDCache_by_Addr((void *)Desc.tx, sizeof(Desc.tx));
+        SCB_CleanDCache_by_Addr((uint32_t *)Desc.tx, sizeof(Desc.tx));
     }
   #endif
-  
+
     ETH->DMATDLAR = (uint32_t)&Desc.tx[0];
     Emac.tx_index = 0;
 }
@@ -259,7 +277,7 @@ static uint32_t crc32_8bit_rev (uint32_t crc32, uint8_t val)
     uint32_t n;
 
     crc32 ^= __RBIT (val);
-    
+
     for (n = 8; n; n--)
     {
         if(crc32 & 0x80000000U)
@@ -416,7 +434,7 @@ static int32_t Initialize(ARM_ETH_MAC_SignalEvent_t cb_event)
     SYSCFG->PMC &= ~SYSCFG_PMC_MII_RMII_SEL;
   #endif
 
-    for(int i = 0; i < sizeof(ETH_Pins) / sizeof(IO_ID_e); i++)
+    for(uint i = 0; i < sizeof(ETH_Pins) / sizeof(IO_ID_e); i++)
     {
         IO_PinInit(ETH_Pins[i]);
     }
@@ -441,7 +459,7 @@ static int32_t Initialize(ARM_ETH_MAC_SignalEvent_t cb_event)
 */
 static int32_t Uninitialize(void)
 {
-    for(int i = 0; i < sizeof(ETH_Pins) / sizeof(IO_ID_e); i++)
+    for(uint i = 0; i < sizeof(ETH_Pins) / sizeof(IO_ID_e); i++)
     {
        IO_PinInitInput(ETH_Pins[i]);
     }
@@ -689,14 +707,14 @@ static int32_t SetAddressFilter(const ARM_ETH_MAC_ADDR *ptr_addr, uint32_t num_a
     ETH->MACA1LR = ((uint32_t)ptr_addr->b[3] << 24) | ((uint32_t)ptr_addr->b[2] << 16) |
                    ((uint32_t)ptr_addr->b[1] <<  8) |  (uint32_t)ptr_addr->b[0];
     num_addr--;
-    
+
     if(num_addr == 0U)
     {
         ETH->MACA2HR = 0U; ETH->MACA2LR = 0U;
         ETH->MACA3HR = 0U; ETH->MACA3LR = 0U;
         return ARM_DRIVER_OK;
     }
-  
+
   ptr_addr++;
 
     ETH->MACA2HR = ((uint32_t)ptr_addr->b[5] <<  8) |  (uint32_t)ptr_addr->b[4] | ETH_MACA2HR_AE;
@@ -708,26 +726,26 @@ static int32_t SetAddressFilter(const ARM_ETH_MAC_ADDR *ptr_addr, uint32_t num_a
         ETH->MACA3HR = 0U; ETH->MACA3LR = 0U;
         return ARM_DRIVER_OK;
     }
-  
+
     ptr_addr++;
 
     ETH->MACA3HR = ((uint32_t)ptr_addr->b[5] <<  8) |  (uint32_t)ptr_addr->b[4] | ETH_MACA3HR_AE;
     ETH->MACA3LR = ((uint32_t)ptr_addr->b[3] << 24) | ((uint32_t)ptr_addr->b[2] << 16) |
                    ((uint32_t)ptr_addr->b[1] <<  8) |  (uint32_t)ptr_addr->b[0];
     num_addr--;
-  
+
     if(num_addr == 0U)
     {
         return ARM_DRIVER_OK;
     }
-    
+
     ptr_addr++;
 
     /* Calculate 64-bit Hash table for remaining MAC addresses */
     for(; num_addr; ptr_addr++, num_addr--)
     {
         crc = crc32_data (&ptr_addr->b[0], 6U) >> 26;
-    
+
         if(crc & 0x20)
         {
             ETH->MACHTHR |= (1U << (crc & 0x1FU));
@@ -737,7 +755,7 @@ static int32_t SetAddressFilter(const ARM_ETH_MAC_ADDR *ptr_addr, uint32_t num_a
             ETH->MACHTLR |= (1U << crc);
         }
     }
-  
+
     /* Enable both, unicast and hash address filtering */
     ETH->MACFFR |= ETH_MACFFR_HPF | ETH_MACFFR_HM;
 
@@ -773,16 +791,16 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
       #if(EMAC_DCACHE_MAINTENANCE == 1)
         if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
         {
-            SCB_InvalidateDCache_by_Addr (&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
+            SCB_InvalidateDCache_by_Addr((uint32_t*)&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
         }
       #endif
-    
+
         if(Desc.tx[Emac.tx_index].CtrlStat & DMA_TX_OWN)
         {
             /* Transmitter is busy, wait */
             return ARM_DRIVER_ERROR_BUSY;
         }
-        
+
         dst = Desc.tx[Emac.tx_index].Addr;
         Desc.tx[Emac.tx_index].Size = len;
     }
@@ -791,20 +809,20 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
         /* Sending data fragments in progress */
         Desc.tx[Emac.tx_index].Size += len;
     }
-  
+
     /* Fast-copy data fragments to ETH-DMA buffer */
     for(; len > 7; dst += 8, frame += 8, len -= 8)
     {
         __UNALIGNED_UINT32_WRITE(&dst[0], __UNALIGNED_UINT32_READ(&frame[0]));
         __UNALIGNED_UINT32_WRITE(&dst[4], __UNALIGNED_UINT32_READ(&frame[4]));
     }
-  
+
     /* Copy remaining 7 bytes */
     for(; len > 1; dst += 2, frame += 2, len -= 2)
     {
         __UNALIGNED_UINT16_WRITE(&dst[0], __UNALIGNED_UINT16_READ(&frame[0]));
     }
-  
+
     if(len > 0)
     {
         dst++[0] = frame++[0];
@@ -819,7 +837,7 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
 
     /* Frame is now ready, send it to DMA */
     ctrl = Desc.tx[Emac.tx_index].CtrlStat & ~DMA_TX_CIC;
-  
+
   #if (EMAC_CHECKSUM_OFFLOAD != 0)
     if (Emac.tx_cks_offload)
     {
@@ -833,7 +851,7 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
         /*   and generates checksum errors at the receiver.              */
         uint16_t prot = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[12]);
         uint16_t frag = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[20]);
-        
+
         if((prot == 0x0008) && (frag & 0xFF3F))
         {
             /* Insert only IP header checksum in fragmented frame */
@@ -846,9 +864,9 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
         }
     }
   #endif
-    
+
     ctrl &= ~(DMA_TX_IC | DMA_TX_TTSE);
-    
+
     if(flags & ARM_ETH_MAC_TX_FRAME_EVENT)
     {
         ctrl |= DMA_TX_IC;
@@ -859,10 +877,10 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
     {
         ctrl |= DMA_TX_TTSE;
     }
-    
+
     Emac.tx_ts_index = Emac.tx_index;
   #endif
-  
+
     __DMB();
     Desc.tx[Emac.tx_index].CtrlStat = ctrl | DMA_TX_OWN;
     __DMB();
@@ -870,18 +888,18 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
   #if (EMAC_DCACHE_MAINTENANCE == 1)
     if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
     {
-        SCB_CleanDCache_by_Addr ((uint8_t *)Desc.tx[Emac.tx_index].Addr, ETH_BUF_SIZE);
-        SCB_CleanDCache_by_Addr ((uint32_t *)&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
+        SCB_CleanDCache_by_Addr((uint32_t *)Desc.tx[Emac.tx_index].Addr, ETH_BUF_SIZE);
+        SCB_CleanDCache_by_Addr((uint32_t *)&Desc.tx[Emac.tx_index], sizeof(TX_Desc));
     }
   #endif
 
     Emac.tx_index++;
-    
+
     if(Emac.tx_index == NUM_TX_BUF)
     {
         Emac.tx_index = 0;
     }
-  
+
     Emac.frame_end = NULL;
 
     if((ETH->DMASR & ETH_DMASR_TBUS) != 0)
@@ -931,13 +949,13 @@ static int32_t ReadFrame(uint8_t *frame, uint32_t len)
         __UNALIGNED_UINT32_WRITE(&frame[0], __UNALIGNED_UINT32_READ(&src[0]));
         __UNALIGNED_UINT32_WRITE(&frame[4], __UNALIGNED_UINT32_READ(&src[4]));
     }
-    
+
     /* Copy remaining 7 bytes */
     for(; len > 1; frame += 2, src += 2, len -= 2)
     {
         __UNALIGNED_UINT16_WRITE(&frame[0], __UNALIGNED_UINT16_READ(&src[0]));
     }
-    
+
     if(len > 0)
     {
         frame[0] = src[0];
@@ -951,12 +969,12 @@ static int32_t ReadFrame(uint8_t *frame, uint32_t len)
   #if (EMAC_DCACHE_MAINTENANCE == 1U)
     if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
     {
-        SCB_CleanDCache_by_Addr ((uint32_t *)&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
+        SCB_CleanDCache_by_Addr((uint32_t *)&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
     }
   #endif
 
     Emac.rx_index++;
-    
+
     if(Emac.rx_index == NUM_RX_BUF)
     {
         Emac.rx_index = 0;
@@ -968,7 +986,7 @@ static int32_t ReadFrame(uint8_t *frame, uint32_t len)
         ETH->DMASR   = ETH_DMASR_RBUS;
         ETH->DMARPDR = 0;
     }
-  
+
     return (cnt);
 }
 
@@ -989,24 +1007,24 @@ static uint32_t GetRxFrameSize(void)
   #if (EMAC_DCACHE_MAINTENANCE == 1)
     if((SCB->CCR & SCB_CCR_DC_Msk) != 0)
     {
-        SCB_InvalidateDCache_by_Addr (&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
+        SCB_InvalidateDCache_by_Addr((uint32_t*)&Desc.rx[Emac.rx_index], sizeof(RX_Desc));
     }
   #endif
 
     stat = Desc.rx[Emac.rx_index].Stat;
-  
+
     if(stat & DMA_RX_OWN)
     {
         /* Owned by DMA */
         return 0;
     }
-  
+
     if(((stat & DMA_RX_ES) != 0) || ((stat & DMA_RX_FS) == 0) || ((stat & DMA_RX_LS) == 0))
     {
         /* Error, this block is invalid */
         return (0xFFFFFFFF);
     }
-    
+
     return (((stat & DMA_RX_FL) >> 16) - 4);
 }
 
@@ -1038,7 +1056,7 @@ static int32_t GetRxFrameTime(ARM_ETH_MAC_TIME* time)
         /* Owned by DMA */
         return ARM_DRIVER_ERROR_BUSY;
     }
-  
+
     time->ns  = rxd->TimeLo;
     time->sec = rxd->TimeHi;
 
@@ -1077,13 +1095,13 @@ static int32_t GetTxFrameTime (ARM_ETH_MAC_TIME *time)
         /* Owned by DMA */
         return ARM_DRIVER_ERROR_BUSY;
     }
-  
+
     if((txd->CtrlStat & DMA_TX_TTSS) == 0)
     {
         /* No transmit time stamp available */
         return ARM_DRIVER_ERROR;
     }
-  
+
     time->ns  = txd->TimeLo;
     time->sec = txd->TimeHi;
     return ARM_DRIVER_OK;
@@ -1179,7 +1197,7 @@ static int32_t ControlTimer(uint32_t control, ARM_ETH_MAC_TIME* time)
             ETH->PTPTSCR |= ETH_PTPTSCR_TSARU;
         break;
     }
-  
+
     return ARM_DRIVER_OK;
 #else
     (void)control;
@@ -1229,11 +1247,11 @@ static int32_t Control(uint32_t control, uint32_t arg)
                     maccr |= ETH_MACCR_DM;
                   #endif
                 break;
-        
+
                 case ARM_ETH_SPEED_100M:
                     maccr |= ETH_MACCR_FES;
                 break;
-        
+
                 default:
                     return ARM_DRIVER_ERROR_UNSUPPORTED;
             }
@@ -1247,7 +1265,7 @@ static int32_t Control(uint32_t control, uint32_t arg)
 
                 case ARM_ETH_MAC_DUPLEX_HALF:
                 break;
-            
+
                 default:
                     return ARM_DRIVER_ERROR;
             }
@@ -1278,21 +1296,21 @@ static int32_t Control(uint32_t control, uint32_t arg)
             {
                 Emac.tx_cks_offload = false;
             }
-        
+
           #else
-            
+
             if((arg & ARM_ETH_MAC_CHECKSUM_OFFLOAD_RX) || (arg & ARM_ETH_MAC_CHECKSUM_OFFLOAD_TX))
             {
                 /* Checksum offload is disabled in the driver */
                 return ARM_DRIVER_ERROR;
             }
           #endif
-        
+
             ETH->DMAOMR = dmaomr;
             ETH->MACCR  = maccr;
 
             macffr = ETH->MACFFR & ~(ETH_MACFFR_PM | ETH_MACFFR_PAM | ETH_MACFFR_BFD);
-            
+
             /* Enable broadcast frame receive */
             if((arg & ARM_ETH_MAC_ADDRESS_BROADCAST) == 0)
             {
@@ -1310,7 +1328,7 @@ static int32_t Control(uint32_t control, uint32_t arg)
             {
                 macffr |= ETH_MACFFR_PM;
             }
-      
+
             ETH->MACFFR = macffr;
         break;
 
@@ -1318,14 +1336,14 @@ static int32_t Control(uint32_t control, uint32_t arg)
             /* Enable/disable MAC transmitter */
             maccr  = ETH->MACCR  & ~ETH_MACCR_TE;
             dmaomr = ETH->DMAOMR & ~ETH_DMAOMR_ST;
-      
+
             if(arg != 0)
             {
                 init_dma ();
                 maccr  |= ETH_MACCR_TE;
                 dmaomr |= ETH_DMAOMR_ST;
             }
-            
+
             ETH->MACCR  = maccr;
             ETH->DMAOMR = dmaomr;
         break;
@@ -1341,7 +1359,7 @@ static int32_t Control(uint32_t control, uint32_t arg)
                 maccr  |= ETH_MACCR_RE;
                 dmaomr |= ETH_DMAOMR_SR;
             }
-        
+
             ETH->MACCR  = maccr;
             ETH->DMAOMR = dmaomr;
         break;
@@ -1351,7 +1369,7 @@ static int32_t Control(uint32_t control, uint32_t arg)
             if(arg & ARM_ETH_MAC_FLUSH_RX)
             {
             }
-        
+
             if(arg & ARM_ETH_MAC_FLUSH_TX)
             {
                 ETH->DMAOMR |= ETH_DMAOMR_FTF;
@@ -1363,7 +1381,7 @@ static int32_t Control(uint32_t control, uint32_t arg)
             ETH->MACVLANTR = arg;
         break;
     }
-  
+
     return ARM_DRIVER_OK;
 }
 
@@ -1379,7 +1397,8 @@ static int32_t Control(uint32_t control, uint32_t arg)
 static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
 {
   #if (ETH_SMI_SW == 0) /* Hardware MDIO */
-    uint32_t val, tick;
+    uint32_t     val;
+    TickCount_t  TickStart;
 
     if((Emac.flags & EMAC_FLAG_POWER) == 0)
     {
@@ -1391,8 +1410,8 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
     ETH->MACMIIAR = val | ETH_MACMIIAR_MB | ((uint32_t)phy_addr << 11) | ((uint32_t)reg_addr << 6);
 
     /* Wait until operation completed */
-    tick = HAL_GetTick();
-  
+    TickStart = GetTick();
+
     do
     {
         if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
@@ -1400,7 +1419,7 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
             break;
         }
     }
-    while((HAL_GetTick() - tick) < PHY_TIMEOUT);
+    while(TickHasTimeOut(TickStart, PHY_TIMEOUT) == false);
 
     if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
     {
@@ -1454,7 +1473,8 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
 static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
 {
   #if (ETH_SMI_SW == 0) /* Hardware MDIO */
-    uint32_t val, tick;
+    uint32_t     val;
+    TickCount_t  TickStart;
 
     if((Emac.flags & EMAC_FLAG_POWER) == 0)
     {
@@ -1466,8 +1486,8 @@ static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
     ETH->MACMIIAR = val | ETH_MACMIIAR_MB | ETH_MACMIIAR_MW | ((uint32_t)phy_addr << 11) | ((uint32_t)reg_addr << 6);
 
     /* Wait until operation completed */
-    tick = HAL_GetTick();
-    
+    TickStart = GetTick();
+
     do
     {
         if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
@@ -1475,7 +1495,7 @@ static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
             break;
         }
     }
-    while((HAL_GetTick() - tick) < PHY_TIMEOUT);
+    while(TickHasTimeOut(TickStart, PHY_TIMEOUT) == false);
 
     if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
     {
@@ -1531,13 +1551,13 @@ void ETH_IRQHandler(void)
         /* Frame sent */
         event |= ARM_ETH_MAC_EVENT_TX_FRAME;
     }
-    
+
     if(dmasr & ETH_DMASR_RS)
     {
         /* Frame received */
         event |= ARM_ETH_MAC_EVENT_RX_FRAME;
     }
-    
+
     macsr = ETH->MACSR;
 
   #if (EMAC_TIME_STAMP != 0)
@@ -1566,7 +1586,7 @@ void ETH_IRQHandler(void)
 
 
 /* MAC Driver Control Block */
-ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_0 =
+ARM_DRIVER_ETH_MAC Driver_ETH_MAC0 =
 {
     GetVersion,
     GetCapabilities,
