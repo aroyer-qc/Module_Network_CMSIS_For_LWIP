@@ -94,6 +94,6 @@ typedef struct phy_ctrl {
 } PHY_CTRL;
 
 // Global functions and variables exported by driver .c module
-extern ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY_(ETH_PHY_NUM);
+extern ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY0;
 
 #endif /* __PHY_LAN8720_H */

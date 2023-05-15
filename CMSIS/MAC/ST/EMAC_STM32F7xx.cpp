@@ -27,6 +27,24 @@ Configuration tab
 
 */
 
+#ifndef   __UNALIGNED_UINT32        /* deprecated */
+  #define __UNALIGNED_UINT32(x)                  (*((__packed uint32_t *)(x)))
+#endif
+#ifndef   __UNALIGNED_UINT16_WRITE
+  #define __UNALIGNED_UINT16_WRITE(addr, val)    ((*((__packed uint16_t *)(addr))) = (val))
+#endif
+#ifndef   __UNALIGNED_UINT16_READ
+  #define __UNALIGNED_UINT16_READ(addr)          (*((const __packed uint16_t *)(addr)))
+#endif
+#ifndef   __UNALIGNED_UINT32_WRITE
+  #define __UNALIGNED_UINT32_WRITE(addr, val)    ((*((__packed uint32_t *)(addr))) = (val))
+#endif
+#ifndef   __UNALIGNED_UINT32_READ
+  #define __UNALIGNED_UINT32_READ(addr)          (*((const __packed uint32_t *)(addr)))
+#endif
+
+
+
 // to be evaluated at run time
 // Pre-calculated value
 //#define ETH_PTPSSIR_VALUE = (uint32_t)((1000000000ULL + SYS_HCLK_CLOCK_FREQUENCY - 1)/ SYS_HCLK_CLOCK_FREQUENCY)
@@ -125,7 +143,7 @@ static const ARM_ETH_MAC_CAPABILITIES DriverCapabilities =
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_udp  */
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_tcp  */
     (EMAC_CHECKSUM_OFFLOAD != 0) ? 1U : 0U,   /* checksum_offload_tx_icmp */
-    (ETH_MII != 0) ?
+    (USE_ETH_RMII == DEF_DISABLED) ?
     ARM_ETH_INTERFACE_MII :
     ARM_ETH_INTERFACE_RMII,                   /* media_interface          */
     0U,                                       /* mac_address              */
@@ -1379,8 +1397,8 @@ static int32_t Control(uint32_t control, uint32_t arg)
 static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
 {
   #if (ETH_SMI_SW == 0) /* Hardware MDIO */
-    uint32_t val;
-    nOS_TickCounter tick;
+    uint32_t     val;
+    TickCount_t  TickStart;
 
     if((Emac.flags & EMAC_FLAG_POWER) == 0)
     {
@@ -1392,7 +1410,7 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
     ETH->MACMIIAR = val | ETH_MACMIIAR_MB | ((uint32_t)phy_addr << 11) | ((uint32_t)reg_addr << 6);
 
     /* Wait until operation completed */
-    tick = GetTick();
+    TickStart = GetTick();
 
     do
     {
@@ -1401,7 +1419,7 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
             break;
         }
     }
-    while((GetTick() - tick) < PHY_TIMEOUT);
+    while(TickHasTimeOut(TickStart, PHY_TIMEOUT) == false);
 
     if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
     {
@@ -1455,7 +1473,8 @@ static int32_t PHY_Read(uint8_t phy_addr, uint8_t reg_addr, uint16_t* data)
 static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
 {
   #if (ETH_SMI_SW == 0) /* Hardware MDIO */
-    uint32_t val, tick;
+    uint32_t     val;
+    TickCount_t  TickStart;
 
     if((Emac.flags & EMAC_FLAG_POWER) == 0)
     {
@@ -1467,7 +1486,7 @@ static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
     ETH->MACMIIAR = val | ETH_MACMIIAR_MB | ETH_MACMIIAR_MW | ((uint32_t)phy_addr << 11) | ((uint32_t)reg_addr << 6);
 
     /* Wait until operation completed */
-    tick = HAL_GetTick();
+    TickStart = GetTick();
 
     do
     {
@@ -1476,7 +1495,7 @@ static int32_t PHY_Write(uint8_t phy_addr, uint8_t reg_addr, uint16_t data)
             break;
         }
     }
-    while((HAL_GetTick() - tick) < PHY_TIMEOUT);
+    while(TickHasTimeOut(TickStart, PHY_TIMEOUT) == false);
 
     if((ETH->MACMIIAR & ETH_MACMIIAR_MB) == 0)
     {
@@ -1567,7 +1586,7 @@ void ETH_IRQHandler(void)
 
 
 /* MAC Driver Control Block */
-ARM_DRIVER_ETH_MAC ARM_Driver_ETH_MAC_0 =
+ARM_DRIVER_ETH_MAC Driver_ETH_MAC0 =
 {
     GetVersion,
     GetCapabilities,

@@ -30,6 +30,7 @@
  *
  */
 
+#include "arch/sys_arch.h"
 #include "lwip/opt.h"
 #include "lwip/def.h"
 #include "lwip/mem.h"
@@ -51,19 +52,21 @@
 #define IFNAME0 'e'
 #define IFNAME1 'n'
 
+
+
 /**
  * Helper struct to hold private data used to operate your ethernet interface.
  * Keeping the ethernet address of the MAC in this struct is not necessary
  * as it is already kept in the struct netif.
  */
-struct ethernetif {
+extern "C" struct ethernetif {
   ARM_DRIVER_ETH_MAC *mac;              // Registered MAC driver
   ARM_DRIVER_ETH_PHY *phy;              // Registered PHY driver
   ARM_ETH_LINK_STATE link;              // Ethernet Link State
   bool               event_rx_frame;    // Callback RX event generated
   bool               phy_ok;            // PHY initialized successfully
   bool               rx_event;          // Frame received
-  nOS_Sem            sem;
+  sys_sem_t          Sem;
 };
 
 static struct ethernetif eth0_status;
@@ -79,10 +82,9 @@ static void  eth0_notify (uint32_t event);
  * @param netif the already initialized lwip network interface structure
  *        for this ethernetif
  */
-static void
-low_level_init(struct netif *netif)
+static void low_level_init(struct netif *netif)
 {
-  struct ethernetif *eth = netif->state;
+  struct ethernetif *eth = (ethernetif *)netif->state;
   ARM_ETH_MAC_CAPABILITIES cap;
 
   /* set MAC hardware address length */
@@ -120,13 +122,13 @@ low_level_init(struct netif *netif)
 #endif /* LWIP_IPV6 && LWIP_IPV6_MLD */
 
   /* Do whatever else is needed to initialize interface. */
-  eth->phy = &ARM_Driver_ETH_PHY_(ETH_DRV_NUM);
-  eth->mac = &ARM_Driver_ETH_MAC_(ETH_DRV_NUM);
+  eth->phy = &Driver_ETH_PHY0;
+  eth->mac = &Driver_ETH_MAC0;
 
   eth->link   = ARM_ETH_LINK_DOWN;
   eth->phy_ok = false;
 
-  eth->sem = xSemaphoreCreateBinary();
+  nOS_SemCreate(&eth->Sem, 0, 1);
 
   /* Get MAC capabilities */
   cap = eth->mac->GetCapabilities ();
@@ -145,9 +147,6 @@ low_level_init(struct netif *netif)
     eth->phy->SetMode (ARM_ETH_PHY_AUTO_NEGOTIATE);
     eth->phy_ok = true;
   }
-
-  xSemaphoreGive(eth->sem, portMAX_DELAY);
-  //sys_sem_signal (&eth->sem);
 }
 
 static void eth0_notify (uint32_t event) {
@@ -173,18 +172,16 @@ static void eth0_notify (uint32_t event) {
  *       dropped because of memory failure (except for the TCP timers).
  */
 
-static err_t
-low_level_output(struct netif *netif, struct pbuf *p)
+static err_t low_level_output(struct netif *netif, struct pbuf *p)
 {
-  struct ethernetif *eth = netif->state;
+  struct ethernetif *eth = (ethernetif *)netif->state;
   struct pbuf *q;
 
 #if ETH_PAD_SIZE
   pbuf_remove_header(p, ETH_PAD_SIZE); /* drop the padding word */
 #endif
 
-  xSemaphoreTake(eth->sem, portMAX_DELAY);
-  //sys_sem_wait (&eth->sem);
+    while(nOS_SemTake(&eth->Sem, NOS_WAIT_INFINITE) != NOS_OK){};
 
   for (q = p; q != NULL; q = q->next) {
     /* Send the data from the pbuf to the interface, one pbuf at a
@@ -194,8 +191,7 @@ low_level_output(struct netif *netif, struct pbuf *p)
     eth->mac->SendFrame (q->payload, q->len, flags);
   }
 
-  xSemaphoreGive(eth->sem, portMAX_DELAY);
-  //sys_sem_signal (&eth->sem);
+    nOS_SemGive(&eth->Sem);
 
   MIB2_STATS_NETIF_ADD(netif, ifoutoctets, p->tot_len);
   if (((u8_t *)p->payload)[0] & 1) {
@@ -224,8 +220,7 @@ low_level_output(struct netif *netif, struct pbuf *p)
  * @return a pbuf filled with the received packet (including MAC header)
  *         NULL on memory error
  */
-static struct pbuf *
-low_level_input(struct netif *netif)
+static struct pbuf * low_level_input(struct netif *netif)
 {
   struct ethernetif *eth = netif->state;
   struct pbuf *p;
@@ -299,20 +294,21 @@ low_level_input(struct netif *netif)
  *
  * @param netif the lwip network interface structure for this ethernetif
  */
-static void
-ethernetif_input(struct netif *netif)
+static void ethernetif_input(struct netif *netif)
 {
   struct ethernetif *eth = netif->state;
   struct pbuf *p;
 
   /* move received packet into a new pbuf */
-  sys_sem_wait (&eth->sem);
+  while(nOS_SemTake(&eth->Sem, NOS_WAIT_INFINITE) != NOS_OK){};
   p = low_level_input(netif);
-  sys_sem_signal (&eth->sem);
+  nOS_SemGive(&eth->Sem);
   /* if no packet could be read, silently ignore this */
-  if (p != NULL) {
+  if (p != NULL)
+    {
     /* pass all packets to ethernet_input, which decides what packets it supports */
-    if (netif->input(p, netif) != ERR_OK) {
+    if (netif->input(p, netif) != ERR_OK)
+     {
       LWIP_DEBUGF(NETIF_DEBUG, ("ethernetif_input: IP input error\n"));
       pbuf_free(p);
       p = NULL;
@@ -334,8 +330,7 @@ ethernetif_input(struct netif *netif)
  *         ERR_MEM if private data couldn't be allocated
  *         any other err_t on error
  */
-err_t
-ethernetif_init(struct netif *netif)
+extern "C" err_t ethernetif_init(struct netif *netif)
 {
   LWIP_ASSERT("netif != NULL", (netif != NULL));
 
@@ -372,7 +367,8 @@ ethernetif_init(struct netif *netif)
   return ERR_OK;
 }
 
-void ethernetif_check_link (struct netif *netif) {
+extern "C" void ethernetif_check_link (struct netif *netif)
+{
   struct ethernetif *eth = netif->state;
   ARM_ETH_LINK_STATE link;
 
@@ -380,11 +376,13 @@ void ethernetif_check_link (struct netif *netif) {
     return;
   }
   /* Check link status */
-  sys_sem_wait (&eth->sem);
-  link = eth->phy->GetLinkState ();
-  if (link == eth->link) {
+  while(nOS_SemTake(&eth->Sem, NOS_WAIT_INFINITE) != NOS_OK){};
+  link = eth->phy->GetLinkState();
+
+  if(link == eth->link)
+  {
     /* No change */
-    sys_sem_signal (&eth->sem);
+    nOS_SemGive(&eth->Sem);
     return;
   }
   eth->link = link;
@@ -397,19 +395,19 @@ void ethernetif_check_link (struct netif *netif) {
                        ARM_ETH_MAC_ADDRESS_BROADCAST         );
     eth->mac->Control(ARM_ETH_MAC_CONTROL_TX,1);
     eth->mac->Control(ARM_ETH_MAC_CONTROL_RX,1);
-    sys_sem_signal (&eth->sem);
+    nOS_SemGive(&eth->Sem);
     netif_set_link_up (netif);
   }
   else {
     /* Stop EMAC DMA */
     eth->mac->Control(ARM_ETH_MAC_CONTROL_TX,0);
-    eth->mac->Control(ARM_ETH_MAC_CONTROL_RX,0);
-    sys_sem_signal (&eth->sem);
+    nOS_SemGive(&eth->Sem);
     netif_set_link_down (netif);
   }
 }
 
-void ethernetif_poll (struct netif *netif) {
+extern "C" void ethernetif_poll (struct netif *netif)
+{
   struct ethernetif *eth = netif->state;
 
   if (!eth->phy_ok || eth->link == ARM_ETH_LINK_DOWN) {

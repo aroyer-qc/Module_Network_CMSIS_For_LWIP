@@ -19,7 +19,7 @@
  *
  * $Date:        6. May 2019
  * $Revision:    V1.3
- *  
+ *
  * Driver:       Driver_ETH_PHYn (default: Driver_ETH_PHY0)
  * Project:      Ethernet Physical Layer Transceiver (PHY)
  *               Driver for LAN8742A
@@ -282,9 +282,7 @@ static ARM_ETH_LINK_INFO GetLinkInfo (void) {
 
 
 /* PHY Driver Control Block */
-extern
-ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY_(ETH_PHY_NUM);
-ARM_DRIVER_ETH_PHY ARM_Driver_ETH_PHY_(ETH_PHY_NUM) = {
+ARM_DRIVER_ETH_PHY Driver_ETH_PHY0 = {
   GetVersion,
   Initialize,
   Uninitialize,

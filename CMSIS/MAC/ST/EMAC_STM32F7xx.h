@@ -162,16 +162,9 @@ typedef struct rx_desc {
 } RX_Desc;
 
 
-/* Ethernet pin description */
-typedef struct _ETH_PIN {
-  GPIO_TypeDef *port;
-  uint16_t      pin;
-  uint16_t      reserved;
-} ETH_PIN;
-
-
 /* EMAC driver control structure */
-typedef struct {
+typedef struct
+{
   ARM_ETH_MAC_SignalEvent_t cb_event;   // Event callback
   uint8_t       flags;                  // Control and state flags
   uint8_t       tx_index;               // Transmit descriptor index
