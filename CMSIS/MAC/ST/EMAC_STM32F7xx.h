@@ -44,35 +44,21 @@
 #include "Driver_ETH_MAC.h"
 //#include "stm32f7xx_hal.h"
 
-    // TODO move this to config
-    #define USE_ETH_RMII  DEF_ENABLED
+// TODO move this to config
+#define USE_ETH_RMII  DEF_ENABLED
 
+/* Software controlled SMI */
+//#define ETH_SMI_SW              1
+/* Hardware controlled SMI */
+#define ETH_SMI_SW              0
 
-  #if defined (EMAC_DMA_MEMORY_ADDRESS)
-  /* Use user specified DMA memory address */
-  #warning "Using EMAC_DMA_MEMORY_ADDRESS definition to override RTE_Device.h setting!"
-  #else
-  /* Use RTE_Device.h specified DMA memory address */
-  #define EMAC_DMA_MEMORY_ADDR      RTE_ETH_DMA_MEM_ADDR
-  #endif
+/* Buffer descriptor default memory address */
+#define EMAC_DMA_MEMORY_ADDR    0x2000C000
 
-    /* Software controlled SMI */
-    //#define ETH_SMI_SW              1
-    /* Hardware controlled SMI */
-    #define ETH_SMI_SW              0
-
-
-  /* Buffer descriptor default memory address */
-  #if !defined(EMAC_DMA_MEMORY_ADDRESS)
-    #define EMAC_DMA_MEMORY_ADDR    0x2000C000
-  #endif
-
-  #endif
     /* Software controlled SMI */
 //    #define ETH_SMI_SW          1
     /* Hardware controlled SMI */
     #define ETH_SMI_SW          0
-#endif
 
 /* EMAC Driver state flags */
 #define EMAC_FLAG_INIT      (1 << 0)    // Driver initialized
