@@ -37,7 +37,7 @@
     #define  __MEMORY_AT(x)     __MEMORY_AT__(x)
   #else
     #define  __MEMORY_AT(x)
-    #warning Position memory containing __MEMORY_AT macro at absolute address!
+  //  #warning Position memory containing __MEMORY_AT macro at absolute address!
   #endif
 #endif
 

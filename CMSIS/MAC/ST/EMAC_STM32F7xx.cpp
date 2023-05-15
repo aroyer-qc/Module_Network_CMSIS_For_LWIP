@@ -27,23 +27,6 @@ Configuration tab
 
 */
 
-#ifndef   __UNALIGNED_UINT32        /* deprecated */
-  #define __UNALIGNED_UINT32(x)                  (*((__packed uint32_t *)(x)))
-#endif
-#ifndef   __UNALIGNED_UINT16_WRITE
-  #define __UNALIGNED_UINT16_WRITE(addr, val)    ((*((__packed uint16_t *)(addr))) = (val))
-#endif
-#ifndef   __UNALIGNED_UINT16_READ
-  #define __UNALIGNED_UINT16_READ(addr)          (*((const __packed uint16_t *)(addr)))
-#endif
-#ifndef   __UNALIGNED_UINT32_WRITE
-  #define __UNALIGNED_UINT32_WRITE(addr, val)    ((*((__packed uint32_t *)(addr))) = (val))
-#endif
-#ifndef   __UNALIGNED_UINT32_READ
-  #define __UNALIGNED_UINT32_READ(addr)          (*((const __packed uint32_t *)(addr)))
-#endif
-
-
 
 // to be evaluated at run time
 // Pre-calculated value
@@ -810,23 +793,9 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
         Desc.tx[Emac.tx_index].Size += len;
     }
 
-    /* Fast-copy data fragments to ETH-DMA buffer */
-    for(; len > 7; dst += 8, frame += 8, len -= 8)
-    {
-        __UNALIGNED_UINT32_WRITE(&dst[0], __UNALIGNED_UINT32_READ(&frame[0]));
-        __UNALIGNED_UINT32_WRITE(&dst[4], __UNALIGNED_UINT32_READ(&frame[4]));
-    }
 
-    /* Copy remaining 7 bytes */
-    for(; len > 1; dst += 2, frame += 2, len -= 2)
-    {
-        __UNALIGNED_UINT16_WRITE(&dst[0], __UNALIGNED_UINT16_READ(&frame[0]));
-    }
-
-    if(len > 0)
-    {
-        dst++[0] = frame++[0];
-    }
+    // Copy data from ETH-DMA buffer to user buffer
+    memcpy(&dst[0], &frame[0], len);
 
     if(flags & ARM_ETH_MAC_TX_FRAME_FRAGMENT)
     {
@@ -849,8 +818,8 @@ static int32_t SendFrame(const uint8_t *frame, uint32_t len, uint32_t flags)
         /*   is IPv4 frame fragment, then the MAC may incorrectly insert */
         /*   checksum into the packet. This corrupts the payload data    */
         /*   and generates checksum errors at the receiver.              */
-        uint16_t prot = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[12]);
-        uint16_t frag = __UNALIGNED_UINT16_READ(&Desc.tx[Emac.tx_index].Addr[20]);
+        uint16_t prot = *(uint16_t*)(&Desc.tx[Emac.tx_index].Addr[12]);
+        uint16_t frag = *(uint16_t*)(&Desc.tx[Emac.tx_index].Addr[20]);
 
         if((prot == 0x0008) && (frag & 0xFF3F))
         {
@@ -943,23 +912,9 @@ static int32_t ReadFrame(uint8_t *frame, uint32_t len)
     }
   #endif
 
-    /* Fast-copy data to frame buffer */
-    for(; len > 7; frame += 8, src += 8, len -= 8)
-    {
-        __UNALIGNED_UINT32_WRITE(&frame[0], __UNALIGNED_UINT32_READ(&src[0]));
-        __UNALIGNED_UINT32_WRITE(&frame[4], __UNALIGNED_UINT32_READ(&src[4]));
-    }
+    // Copy data to ETH-DMA buffer
+    memcpy(&frame[0], &src[0], len);
 
-    /* Copy remaining 7 bytes */
-    for(; len > 1; frame += 2, src += 2, len -= 2)
-    {
-        __UNALIGNED_UINT16_WRITE(&frame[0], __UNALIGNED_UINT16_READ(&src[0]));
-    }
-
-    if(len > 0)
-    {
-        frame[0] = src[0];
-    }
 
     /* Return this block back to ETH-DMA */
     __DMB();
