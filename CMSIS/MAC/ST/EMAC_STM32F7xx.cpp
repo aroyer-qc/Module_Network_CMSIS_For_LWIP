@@ -151,7 +151,6 @@ static struct
     uint32_t tx_buf [NUM_TX_BUF][ETH_BUF_SIZE >> 2];
 } Desc __MEMORY_AT(EMAC_DMA_MEMORY_ADDR);
 
-
 /**
   \fn          void init_rx_desc (void)
   \brief       Initialize Rx DMA descriptors.
